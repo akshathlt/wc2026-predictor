@@ -336,7 +336,7 @@ export default function Leaderboard() {
   const [players, setPlayers]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [lastUpdate, setLastUpdate] = useState(null)
-  const [oddsData, setOddsData] = useState(null)
+  const [oddsData, setOddsData] = useState(null) // reserved for future use
 
   const fetchPlayers = async () => {
     const { data } = await supabase
@@ -347,24 +347,8 @@ export default function Leaderboard() {
     setLoading(false)
   }
 
-  // Fetch world predictions (free ESPN odds / public data)
-  const fetchWorldOdds = async () => {
-    try {
-      const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard')
-      const json = await res.json()
-      const events = json.events || []
-      // Count completed events and compute a mock "world accuracy" from public picks
-      const completed = events.filter(e => e.competitions?.[0]?.status?.type?.completed)
-      if (completed.length > 0) {
-        // ESPN doesn't have public pick % but we simulate from odds for now
-        setOddsData({ completed: completed.length, total: events.length })
-      }
-    } catch(_) {}
-  }
-
   useEffect(() => {
     fetchPlayers()
-    fetchWorldOdds()
     const channel = supabase
       .channel('leaderboard')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, fetchPlayers)
@@ -388,7 +372,7 @@ export default function Leaderboard() {
   const myMatchPts   = myData?.stage_pts || 0
   const myAccuracy   = totalMatches > 0 ? Math.round((myMatchPts / (totalMatches * 5)) * 100) : 0
   // "World" average — placeholder until real data; ESPN match data used when available
-  const worldAvgAcc  = oddsData ? 42 : 38
+  const worldAvgAcc = 38  // baseline placeholder until enough results accumulate
 
   const sendDailyEmail = () => {
     const top5 = players.slice(0, 5)

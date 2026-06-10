@@ -1,8 +1,28 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
+import { fetchWithFallback } from '../lib/fetchWithFallback'
 
 const KNOCKOUT_STAGES = ['r32', 'qf', 'sf', '3rd', 'final']
+const FIFA_MATCHES_URL = 'https://api.fifa.com/api/v3/calendar/matches?language=en&count=200&idSeason=285023'
+
+// MatchStatus: 4=FT, 5=FT, 6=FT AET, 7=FT Pen
+const FINISHED_STATUSES = [4, 5, 6, 7]
+
+function Section({ title, icon, open, onToggle, children }) {
+  return (
+    <div className="card overflow-hidden mb-4">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-800/40 transition-colors"
+      >
+        <span className="font-bold text-base">{icon} {title}</span>
+        <span className="text-slate-500 text-sm">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && <div className="border-t border-slate-800">{children}</div>}
+    </div>
+  )
+}
 
 function MatchResultForm({ match, onSaved }) {
   const [home,      setHome]      = useState(match.home_goals ?? '')
@@ -25,11 +45,14 @@ function MatchResultForm({ match, onSaved }) {
   const stageBadge = { r32:'R16', qf:'QF', sf:'SF', '3rd':'3rd', final:'FINAL' }
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5 py-2 border-b border-slate-800 last:border-0">
       <div className="flex items-center gap-3 text-sm">
         <div className="flex-1 min-w-0">
           <span className="font-medium truncate block">{match.home_team} vs {match.away_team}</span>
-          {knockout && <span className="text-xs bg-purple-700/40 text-purple-300 px-1.5 py-0.5 rounded">{stageBadge[match.stage]}</span>}
+          <span className="text-xs text-slate-500">
+            Match #{match.match_num} · {match.group_name ? `Group ${match.group_name}` : match.stage.toUpperCase()}
+            {knockout && <span className="ml-1 bg-purple-700/40 text-purple-300 px-1.5 py-0.5 rounded">{stageBadge[match.stage]}</span>}
+          </span>
         </div>
         <input type="number" min="0" max="20" value={home} onChange={e => setHome(e.target.value)}
           className="w-12 bg-slate-800 border border-slate-600 rounded-lg text-center py-1 text-white focus:outline-none focus:border-green-500" />
@@ -41,20 +64,16 @@ function MatchResultForm({ match, onSaved }) {
           {saving ? '…' : 'Save'}
         </button>
       </div>
-      {/* Penalty winner for knockout draws */}
       {knockout && isDraw && home !== '' && away !== '' && (
         <div className="flex items-center gap-2 pl-2">
           <span className="text-xs text-purple-300">🥅 Pen winner:</span>
-          <button onClick={() => setPenWinner(match.home_team)}
-            className={`px-2 py-0.5 rounded text-xs font-semibold border transition-all
-              ${penWinner === match.home_team ? 'bg-purple-700 border-purple-500 text-white' : 'border-slate-700 text-slate-400 hover:border-purple-500'}`}>
-            {match.home_team}
-          </button>
-          <button onClick={() => setPenWinner(match.away_team)}
-            className={`px-2 py-0.5 rounded text-xs font-semibold border transition-all
-              ${penWinner === match.away_team ? 'bg-purple-700 border-purple-500 text-white' : 'border-slate-700 text-slate-400 hover:border-purple-500'}`}>
-            {match.away_team}
-          </button>
+          {[match.home_team, match.away_team].map(t => (
+            <button key={t} onClick={() => setPenWinner(t)}
+              className={`px-2 py-0.5 rounded text-xs font-semibold border transition-all
+                ${penWinner === t ? 'bg-purple-700 border-purple-500 text-white' : 'border-slate-700 text-slate-400 hover:border-purple-500'}`}>
+              {t}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -65,58 +84,58 @@ export default function Admin() {
   const { player } = useAuth()
   const [matches,  setMatches]  = useState([])
   const [players,  setPlayers]  = useState([])
-  const [groups,   setGroups]   = useState([])
-  const [tab,      setTab]      = useState('matches')
-  const [newGroup, setNewGroup] = useState({ code:'', name:'' })
   const [msg,      setMsg]      = useState('')
+  const [sections, setSections] = useState({ matches: true, players: false })
+
+  const toggle = (k) => setSections(s => ({ ...s, [k]: !s[k] }))
+
+  const reloadMatches = () =>
+    supabase.from('matches').select('*').order('match_num').then(({ data }) => data && setMatches(data))
+
+  const reloadPlayers = () =>
+    supabase.from('players').select('*').order('total_pts', { ascending: false }).then(({ data }) => data && setPlayers(data))
 
   useEffect(() => {
     if (!player?.is_admin) return
-    supabase.from('matches').select('*').order('match_num').then(({ data }) => data && setMatches(data))
-    supabase.from('players').select('*').order('total_pts', { ascending: false }).then(({ data }) => data && setPlayers(data))
-    supabase.from('prediction_groups').select('*').then(({ data }) => data && setGroups(data))
+    reloadMatches()
+    reloadPlayers()
   }, [player])
 
-  const syncFromESPN = async () => {
-    setMsg('Fetching scores from ESPN…')
-    try {
-      const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard')
-      const json = await res.json()
-      const events = json.events || []
-      if (events.length === 0) { setMsg('No live/recent matches found on ESPN right now.'); return }
+  // Sync from FIFA API
+  const syncFromFIFA = async () => {
+    setMsg('Fetching results from FIFA API…')
+    const data = await fetchWithFallback(FIFA_MATCHES_URL)
+    if (!data) { setMsg('FIFA API unavailable — try again later.'); return }
 
-      let updated = 0
-      for (const event of events) {
-        const comp = event.competitions?.[0]
-        if (!comp) continue
-        const finished = comp.status?.type?.completed
-        if (!finished) continue
+    const fifaMatches = (data.Results || []).filter(m => FINISHED_STATUSES.includes(m.MatchStatus))
+    if (fifaMatches.length === 0) { setMsg('No completed matches found in FIFA API yet.'); return }
 
-        const home = comp.competitors?.find(c => c.homeAway === 'home')
-        const away = comp.competitors?.find(c => c.homeAway === 'away')
-        if (!home || !away) continue
+    let updated = 0
+    for (const fm of fifaMatches) {
+      const homeScore = fm.HomeTeamScore
+      const awayScore = fm.AwayTeamScore
+      if (homeScore == null || awayScore == null) continue
 
-        const homeName = home.team?.displayName
-        const awayName = away.team?.displayName
-        const homeGoals = parseInt(home.score ?? '')
-        const awayGoals = parseInt(away.score ?? '')
-        if (isNaN(homeGoals) || isNaN(awayGoals)) continue
+      const homeName = fm.Home?.ShortClubName
+      const match = matches.find(m =>
+        m.home_team?.toLowerCase() === homeName?.toLowerCase() ||
+        m.match_num === fm.MatchNumber
+      )
+      if (!match) continue
 
-        // Match by team names (case-insensitive partial match)
-        const match = matches.find(m =>
-          m.home_team.toLowerCase().includes(homeName?.toLowerCase()) ||
-          homeName?.toLowerCase().includes(m.home_team.toLowerCase())
-        )
-        if (!match) continue
-
-        await supabase.from('matches').update({ home_goals: homeGoals, away_goals: awayGoals, locked: true }).eq('id', match.id)
-        updated++
+      const update = { home_goals: homeScore, away_goals: awayScore, locked: true }
+      // Penalty: ResultType 2 = Penalties
+      if (fm.ResultType === 2 && fm.HomeTeamPenaltyScore != null) {
+        const penWinner = fm.HomeTeamPenaltyScore > fm.AwayTeamPenaltyScore
+          ? fm.Home?.ShortClubName : fm.Away?.ShortClubName
+        update.penalty_winner = penWinner
       }
-      setMsg(updated > 0 ? `Synced ${updated} match result(s) from ESPN ✅` : 'No completed matches matched our fixtures yet.')
-      supabase.from('matches').select('*').order('match_num').then(({ data }) => data && setMatches(data))
-    } catch (e) {
-      setMsg('ESPN sync failed: ' + e.message)
+      await supabase.from('matches').update(update).eq('id', match.id)
+      updated++
     }
+
+    setMsg(updated > 0 ? `Synced ${updated} result(s) from FIFA API ✅` : 'No new results to sync yet.')
+    reloadMatches()
   }
 
   const recalcPoints = async () => {
@@ -130,21 +149,16 @@ export default function Admin() {
         let pts = 0
         const realDiff = match.home_goals - match.away_goals
         const predDiff = pred.predicted_home - pred.predicted_away
-        const realOutcome = Math.sign(realDiff)
-        const predOutcome = Math.sign(predDiff)
-        if (predOutcome === realOutcome) pts += 2
+        if (Math.sign(predDiff) === Math.sign(realDiff)) pts += 2
         if (predDiff === realDiff) pts += 1
         if (pred.predicted_home === match.home_goals && pred.predicted_away === match.away_goals) pts += 2
-        // Knockout draw bonus: predicted a draw in knockout = +5 extra
         let penPts = 0
         if (knockout && realDraw && predDiff === 0) penPts += 5
-        // Penalty winner bonus: correct penalty pick = +5 extra
         if (knockout && realDraw && match.penalty_winner && pred.penalty_winner === match.penalty_winner) penPts += 5
         if (pred.joker_used) { pts *= 2; penPts *= 2 }
         await supabase.from('match_predictions').update({ total_pts: pts, penalty_pts: penPts }).eq('id', pred.id)
       }
     }
-    // Recount player totals
     const { data: allPreds } = await supabase.from('match_predictions').select('player_id, total_pts, penalty_pts')
     const totals = {}
     for (const p of allPreds || []) {
@@ -154,7 +168,7 @@ export default function Admin() {
       await supabase.from('players').update({ stage_pts: pts, total_pts: pts }).eq('id', pid)
     }
     setMsg('Points recalculated ✅')
-    supabase.from('players').select('*').order('total_pts', { ascending: false }).then(({ data }) => data && setPlayers(data))
+    reloadPlayers()
   }
 
   const deletePlayer = async (id) => {
@@ -171,111 +185,64 @@ export default function Admin() {
   const resetPlayerPassword = async (p) => {
     const tempPass = 'WC2026@' + Math.floor(1000 + Math.random() * 9000)
     if (!window.confirm(`Reset password for ${p.display_name}?\n\nTemp password will be: ${tempPass}\n\nCopy it and share with the user.`)) return
-    // Set must_change_password flag
     await supabase.from('players').update({ must_change_password: true }).eq('id', p.id)
     setPlayers(prev => prev.map(x => x.id === p.id ? { ...x, must_change_password: true } : x))
-    // Show the temp password to copy — admin must update via SQL
-    setMsg(`Temp password for ${p.display_name}: ${tempPass} — Run SQL to set it, then share with user ✅`)
+    setMsg(`Temp password for ${p.display_name}: ${tempPass} — set it via SQL ✅`)
   }
-
-  const addGroup = async () => {
-    if (!newGroup.code || !newGroup.name) return
-    const { data, error } = await supabase.from('prediction_groups').insert(newGroup).select().single()
-    if (!error && data) { setGroups(prev => [...prev, data]); setNewGroup({ code:'', name:'' }) }
-  }
-
-  const deleteGroup = async (id) => {
-    if (!window.confirm('Delete this group?')) return
-    await supabase.from('prediction_groups').delete().eq('id', id)
-    setGroups(prev => prev.filter(g => g.id !== id))
-  }
-
-  const [changelog, setChangelog] = useState([])
-  const [newEntry, setNewEntry] = useState({ version: '', title: '', items: '', is_major: false })
-
-  useEffect(() => {
-    if (!player?.is_admin) return
-    supabase.from('app_changelog').select('*').order('released_at', { ascending: false }).then(({ data }) => data && setChangelog(data))
-  }, [player])
-
-  const addChangelog = async () => {
-    if (!newEntry.version || !newEntry.title || !newEntry.items) return
-    const items = newEntry.items.split('\n').map(s => s.trim()).filter(Boolean)
-    const { data, error } = await supabase.from('app_changelog')
-      .insert({ version: newEntry.version, title: newEntry.title, items: JSON.stringify(items), is_major: newEntry.is_major })
-      .select().single()
-    if (!error && data) {
-      setChangelog(prev => [data, ...prev])
-      setNewEntry({ version: '', title: '', items: '', is_major: false })
-      setMsg('Changelog entry added ✅')
-    }
-  }
-
-  const deleteChangelog = async (id) => {
-    if (!window.confirm('Delete this entry?')) return
-    await supabase.from('app_changelog').delete().eq('id', id)
-    setChangelog(prev => prev.filter(e => e.id !== id))
-  }
-
-  const tabs = ['matches', 'players', 'groups', 'changelog']
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-black">⚙️ Admin Panel</h1>
-        {msg && <p className="text-green-400 text-sm">{msg}</p>}
+        {msg && (
+          <div className="flex items-center gap-2">
+            <p className="text-green-400 text-sm">{msg}</p>
+            <button onClick={() => setMsg('')} className="text-slate-500 hover:text-white text-lg leading-none">×</button>
+          </div>
+        )}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6 flex-wrap">
-        {tabs.map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`px-5 py-2 rounded-xl text-sm font-semibold capitalize transition-all
-              ${tab === t ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
-            {t === 'matches' ? '⚽ Matches' : t === 'players' ? '👥 Players' : t === 'groups' ? '🏟️ Groups' : '✨ Changelog'}
-          </button>
-        ))}
-      </div>
-
-      {/* Matches tab */}
-      {tab === 'matches' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <p className="text-slate-400 text-sm">Enter real scores after each match. Points recalculate automatically.</p>
+      {/* ── Matches Section ── */}
+      <Section title="Matches & Results" icon="⚽" open={sections.matches} onToggle={() => toggle('matches')}>
+        <div className="p-5 space-y-4">
+          <div className="flex flex-wrap gap-2 items-center justify-between">
+            <p className="text-slate-400 text-sm">Enter real scores after each match. Or sync automatically from FIFA.</p>
             <div className="flex gap-2">
-              <button onClick={syncFromESPN} className="btn-secondary !py-2 !px-4 text-sm">
-                📡 Sync from ESPN
+              <button onClick={syncFromFIFA} className="btn-secondary !py-2 !px-4 text-sm">
+                📡 Sync from FIFA API
               </button>
               <button onClick={recalcPoints} className="btn-primary !py-2 !px-4 text-sm">
-                🔄 Recalculate All Points
+                🔄 Recalculate Points
               </button>
             </div>
           </div>
-          <div className="card p-4 space-y-3">
-            {matches.length === 0 && <p className="text-slate-500 text-sm text-center py-4">No matches in DB yet — run the SQL schema first.</p>}
-            {matches.map(m => (
-              <MatchResultForm key={m.id} match={m}
-                onSaved={() => supabase.from('matches').select('*').order('match_num').then(({ data }) => data && setMatches(data))} />
-            ))}
+          <div className="space-y-0 divide-y divide-slate-800 rounded-xl border border-slate-700 px-4">
+            {matches.length === 0
+              ? <p className="text-slate-500 text-sm text-center py-6">No matches loaded yet.</p>
+              : matches.map(m => (
+                  <MatchResultForm key={m.id} match={m} onSaved={reloadMatches} />
+                ))
+            }
           </div>
         </div>
-      )}
+      </Section>
 
-      {/* Players tab */}
-      {tab === 'players' && (
-        <div className="card overflow-hidden">
+      {/* ── Players Section ── */}
+      <Section title={`Players (${players.length})`} icon="👥" open={sections.players} onToggle={() => toggle('players')}>
+        <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-800">
+            <thead className="bg-slate-800/60">
               <tr>
-                {['Player','Email','Group','Pts','Admin','Actions'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-slate-400 font-semibold text-xs uppercase">{h}</th>
+                {['Player', 'Email', 'Group', 'Pts', 'Admin', 'Actions'].map(h => (
+                  <th key={h} className="text-left px-4 py-3 text-slate-400 font-semibold text-xs uppercase whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
               {players.map(p => (
-                <tr key={p.id} className="hover:bg-slate-800/50">
-                  <td className="px-4 py-3 font-medium">
+                <tr key={p.id} className="hover:bg-slate-800/40">
+                  <td className="px-4 py-3 font-medium whitespace-nowrap">
                     {p.display_name}
                     {p.must_change_password && <span className="ml-2 text-xs bg-orange-900/50 text-orange-400 px-1.5 py-0.5 rounded">temp pwd</span>}
                   </td>
@@ -289,76 +256,18 @@ export default function Admin() {
                       {p.is_admin ? 'Yes' : 'No'}
                     </button>
                   </td>
-                  <td className="px-4 py-3 flex gap-2">
-                    <button onClick={() => resetPlayerPassword(p)}
-                      className="text-orange-400 hover:text-orange-300 text-xs font-medium">
-                      Reset Pwd
-                    </button>
-                    <button onClick={() => deletePlayer(p.id)}
-                      className="text-red-500 hover:text-red-400 text-xs font-medium">
-                      Remove
-                    </button>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-3">
+                      <button onClick={() => resetPlayerPassword(p)} className="text-orange-400 hover:text-orange-300 text-xs font-medium">Reset Pwd</button>
+                      <button onClick={() => deletePlayer(p.id)} className="text-red-500 hover:text-red-400 text-xs font-medium">Remove</button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      )}
-
-      {/* Changelog tab */}
-      {tab === 'changelog' && (
-        <div className="space-y-6">
-          {/* Add new entry */}
-          <div className="card p-5 space-y-3">
-            <h3 className="font-bold">Add Release Entry</h3>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <input value={newEntry.version} onChange={e => setNewEntry(p => ({...p, version: e.target.value}))}
-                placeholder="Version e.g. 1.3.0"
-                className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-green-500" />
-              <input value={newEntry.title} onChange={e => setNewEntry(p => ({...p, title: e.target.value}))}
-                placeholder="Title e.g. Live Scores Update"
-                className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-green-500" />
-            </div>
-            <textarea value={newEntry.items} onChange={e => setNewEntry(p => ({...p, items: e.target.value}))}
-              placeholder="Bullet points — one per line&#10;e.g. Added live score updates&#10;Fixed leaderboard refresh"
-              rows={4}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-green-500 resize-none" />
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-                <input type="checkbox" checked={newEntry.is_major} onChange={e => setNewEntry(p => ({...p, is_major: e.target.checked}))}
-                  className="w-4 h-4 accent-green-500" />
-                Major release (starred on timeline)
-              </label>
-              <button onClick={addChangelog} className="btn-primary !py-2 !px-5">Publish Entry</button>
-            </div>
-          </div>
-
-          {/* Existing entries */}
-          <div className="space-y-3">
-            {changelog.map(e => {
-              const items = Array.isArray(e.items) ? e.items : JSON.parse(e.items || '[]')
-              return (
-                <div key={e.id} className="card p-4 flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="font-mono text-xs bg-slate-800 px-2 py-0.5 rounded">v{e.version}</span>
-                      {e.is_major && <span className="text-xs text-green-400">★ Major</span>}
-                      <span className="font-bold">{e.title}</span>
-                      <span className="text-xs text-slate-500">{new Date(e.released_at).toLocaleDateString()}</span>
-                    </div>
-                    <ul className="text-xs text-slate-400 space-y-0.5">
-                      {items.map((item, i) => <li key={i} className="flex gap-1.5"><span className="text-green-600">✓</span>{item}</li>)}
-                    </ul>
-                  </div>
-                  <button onClick={() => deleteChangelog(e.id)} className="text-red-500 hover:text-red-400 text-xs shrink-0">Delete</button>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
+      </Section>
     </div>
   )
 }
-
