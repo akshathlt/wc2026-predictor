@@ -36,7 +36,6 @@ export default function Navbar() {
     { to: '/standings',   label: '📊 Standings'     },
     { to: '/leaderboard', label: '🏆 Leaderboard'   },
     { to: '/rules',       label: '📖 Rules'         },
-    { to: '/whats-new',   label: '✨ What\'s New', badge: hasNew },
     ...(player?.is_admin ? [{ to: '/admin', label: '⚙️ Admin' }] : []),
   ]
 
@@ -66,8 +65,17 @@ export default function Navbar() {
           ))}
         </div>
 
-        {/* Auth */}
-        <div className="flex items-center shrink-0" ref={ref}>
+        {/* Auth + What's New */}
+        <div className="flex items-center gap-2 shrink-0" ref={ref}>
+          {/* What's New — always visible */}
+          <Link to="/whats-new"
+            className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-sm font-semibold transition-colors
+              ${location.pathname === '/whats-new'
+                ? 'border-yellow-500 text-yellow-300 bg-yellow-900/20'
+                : 'border-slate-700 text-slate-300 hover:border-slate-500 hover:text-white'}`}>
+            ✨ What's New
+            {hasNew && <span className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />}
+          </Link>
           {session ? (
             <div className="relative">
               <button onClick={() => setOpen(o => !o)}
