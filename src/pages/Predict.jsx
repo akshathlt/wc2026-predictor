@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { FLAG_URL } from '../lib/data'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { WC_GROUPS, GROUP_NAMES, SPECIAL_QUESTIONS, HOST_OPTIONS, TOP10_TEAMS, ALL_TEAMS, LOCK_DATE } from '../lib/data'
@@ -32,7 +33,9 @@ function SortableTeam({ team, position, locked }) {
       className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border border-slate-700/50 ${posBg[position]} cursor-grab active:cursor-grabbing select-none transition-colors hover:border-slate-600`}
       {...attributes} {...listeners}>
       <span className={`w-6 text-sm font-black ${posColors[position]}`}>{position + 1}</span>
-      <span className="text-xl">{team.flag}</span>
+      <img src={FLAG_URL(team.iso)} alt={team.name}
+        className="w-7 h-5 object-cover rounded-sm"
+        onError={e => { e.target.style.display='none' }} />
       <span className="flex-1 text-sm font-medium">{team.name}</span>
       <span className="text-slate-600 text-xs">#{team.rank}</span>
       {!locked && <span className="text-slate-600 text-xs">⠿</span>}
@@ -98,7 +101,9 @@ function ThirdPlaceStep({ groupOrder, picks, setPicks }) {
               <button key={team.name} onClick={() => toggle(team.name)} disabled={disabled}
                 className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all
                   ${checked ? 'border-green-500 bg-green-900/30 text-green-300' : disabled ? 'border-slate-700 bg-slate-800/50 text-slate-600 cursor-not-allowed' : 'border-slate-700 hover:border-slate-500 text-slate-300'}`}>
-                <span className="text-lg">{team.flag}</span>
+                <img src={FLAG_URL(team.iso)} alt={team.name}
+                  className="w-6 h-4 object-cover rounded-sm"
+                  onError={e => { e.target.style.display='none' }} />
                 <span className="truncate">{team.name}</span>
                 {checked && <span className="ml-auto">✓</span>}
                 <span className="text-xs text-slate-500 ml-auto">G{GROUP_NAMES[i]}</span>
@@ -205,7 +210,7 @@ export default function Predict() {
         GROUP_NAMES.forEach(g => {
           const groupData = data.filter(r => r.group_name === g).sort((a,b) => a.predicted_position - b.predicted_position)
           if (groupData.length === 4) {
-            newOrder[g] = groupData.map(r => WC_GROUPS[g].find(t => t.name === r.team_name) || { name: r.team_name, flag: '🏳️', rank: 0 })
+            newOrder[g] = groupData.map(r => WC_GROUPS[g].find(t => t.name === r.team_name) || { name: r.team_name, iso: 'un', rank: 0 })
           }
         })
         setGroupOrder(newOrder)
