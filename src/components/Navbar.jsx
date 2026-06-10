@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
+import { avatarUrl } from '../lib/avatar'
 
 export default function Navbar() {
   const { session, player, signOut } = useAuth()
@@ -79,11 +80,16 @@ export default function Navbar() {
           {session ? (
             <div className="relative">
               <button onClick={() => setOpen(o => !o)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-700 hover:border-slate-500 transition-colors text-sm">
-                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" className="text-slate-300">
-                  <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
-                </svg>
-                <span className="hidden sm:block text-slate-300 max-w-[120px] truncate">
+                className="flex items-center gap-2 px-2 py-1.5 rounded-xl border border-slate-700 hover:border-slate-500 transition-colors text-sm">
+                {/* Avatar */}
+                <div className="w-7 h-7 rounded-full overflow-hidden bg-slate-800 border border-slate-600 flex-shrink-0">
+                  <img
+                    src={avatarUrl(player?.avatar_seed || 'adventurer', player?.display_name || 'player')}
+                    alt="avatar"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <span className="hidden sm:block text-slate-300 max-w-[100px] truncate">
                   {player?.display_name || session.user.email}
                 </span>
                 <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24" className="text-slate-500">
@@ -93,10 +99,14 @@ export default function Navbar() {
 
               {open && (
                 <div className="absolute right-0 mt-2 w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-xl py-2 z-50">
-                  <div className="px-4 py-2 border-b border-slate-700">
-                    <p className="text-xs text-slate-500">Signed in as</p>
-                    <p className="text-sm font-semibold text-white truncate">{player?.display_name || '—'}</p>
-                    <p className="text-xs text-slate-400 truncate">{session.user.email}</p>
+                  <div className="px-4 py-3 border-b border-slate-700 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-800 border border-slate-600 flex-shrink-0">
+                      <img src={avatarUrl(player?.avatar_seed || 'adventurer', player?.display_name || 'player')} alt="avatar" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white truncate">{player?.display_name || '—'}</p>
+                      <p className="text-xs text-slate-400 truncate">{session.user.email}</p>
+                    </div>
                   </div>
                   <button onClick={() => { setOpen(false); signOut(); nav('/') }}
                     className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-800 transition-colors">

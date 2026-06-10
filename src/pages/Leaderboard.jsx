@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
+import { avatarUrl } from '../lib/avatar'
 
 const MEDALS = ['🥇','🥈','🥉']
 
@@ -81,13 +82,21 @@ function PlayerRow({ p, rank, isMe }) {
   }, [p.total_pts])
 
   const topThree = rank <= 3
+  // Parse avatar_seed: stored as "style" (e.g. "adventurer")
+  const avatarStyle = p.avatar_seed || 'adventurer'
+  const seed = p.display_name || 'player'
+
   return (
-    <div className={`flex items-center gap-4 px-4 py-3 rounded-xl border transition-all
+    <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all
       ${isMe ? 'border-green-500 bg-green-900/20' : topThree ? 'border-yellow-700/50 bg-yellow-900/10' : 'border-slate-700/50 hover:border-slate-600'}
       ${flash ? 'animate-pop' : ''}`}>
-      <span className="w-8 text-lg font-black text-center">
+      <span className="w-8 text-lg font-black text-center flex-shrink-0">
         {rank <= 3 ? MEDALS[rank-1] : <span className="text-slate-400 text-sm">{rank}</span>}
       </span>
+      {/* Avatar */}
+      <div className="w-9 h-9 rounded-full overflow-hidden bg-slate-800 border border-slate-700 flex-shrink-0">
+        <img src={avatarUrl(avatarStyle, seed)} alt={p.display_name} className="w-full h-full object-cover" />
+      </div>
       <div className="flex-1 min-w-0">
         <p className="font-semibold truncate">
           {p.display_name}
@@ -333,7 +342,7 @@ export default function Leaderboard() {
   const fetchPlayers = async () => {
     const { data } = await supabase
       .from('players')
-      .select('id, display_name, total_pts, stage_pts, special_pts, group_code')
+      .select('id, display_name, total_pts, stage_pts, special_pts, group_code, avatar_seed')
       .order('total_pts', { ascending: false })
     if (data) { setPlayers(data); setLastUpdate(new Date()) }
     setLoading(false)
