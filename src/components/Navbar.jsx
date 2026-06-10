@@ -1,18 +1,31 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { supabase } from '../lib/supabase'
 
 export default function Navbar() {
   const { session, player, signOut } = useAuth()
   const location = useLocation()
   const nav = useNavigate()
   const [open, setOpen] = useState(false)
+  const [hasNew, setHasNew] = useState(false)
   const ref = useRef(null)
 
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  useEffect(() => {
+    // Show NEW badge if latest changelog entry is within 3 days
+    supabase.from('app_changelog').select('released_at').order('released_at', { ascending: false }).limit(1)
+      .then(({ data }) => {
+        if (data?.[0]) {
+          const diff = Date.now() - new Date(data[0].released_at).getTime()
+          setHasNew(diff < 3 * 24 * 60 * 60 * 1000)
+        }
+      })
   }, [])
 
   const links = [
@@ -23,6 +36,7 @@ export default function Navbar() {
     { to: '/standings',   label: '📊 Standings'     },
     { to: '/leaderboard', label: '🏆 Leaderboard'   },
     { to: '/rules',       label: '📖 Rules'         },
+    { to: '/whats-new',   label: '✨ What\'s New', badge: hasNew },
     ...(player?.is_admin ? [{ to: '/admin', label: '⚙️ Admin' }] : []),
   ]
 
@@ -43,8 +57,11 @@ export default function Navbar() {
         <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide text-sm font-medium flex-1">
           {links.map(l => (
             <Link key={l.to} to={l.to}
-              className={`whitespace-nowrap px-3 py-1 transition-colors ${active(l.to)}`}>
+              className={`relative whitespace-nowrap px-3 py-1 transition-colors ${active(l.to)}`}>
               {l.label}
+              {l.badge && (
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-yellow-400 rounded-full" />
+              )}
             </Link>
           ))}
         </div>

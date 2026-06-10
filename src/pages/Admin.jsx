@@ -190,7 +190,34 @@ export default function Admin() {
     setGroups(prev => prev.filter(g => g.id !== id))
   }
 
-  const tabs = ['matches', 'players', 'groups']
+  const [changelog, setChangelog] = useState([])
+  const [newEntry, setNewEntry] = useState({ version: '', title: '', items: '', is_major: false })
+
+  useEffect(() => {
+    if (!player?.is_admin) return
+    supabase.from('app_changelog').select('*').order('released_at', { ascending: false }).then(({ data }) => data && setChangelog(data))
+  }, [player])
+
+  const addChangelog = async () => {
+    if (!newEntry.version || !newEntry.title || !newEntry.items) return
+    const items = newEntry.items.split('\n').map(s => s.trim()).filter(Boolean)
+    const { data, error } = await supabase.from('app_changelog')
+      .insert({ version: newEntry.version, title: newEntry.title, items: JSON.stringify(items), is_major: newEntry.is_major })
+      .select().single()
+    if (!error && data) {
+      setChangelog(prev => [data, ...prev])
+      setNewEntry({ version: '', title: '', items: '', is_major: false })
+      setMsg('Changelog entry added ✅')
+    }
+  }
+
+  const deleteChangelog = async (id) => {
+    if (!window.confirm('Delete this entry?')) return
+    await supabase.from('app_changelog').delete().eq('id', id)
+    setChangelog(prev => prev.filter(e => e.id !== id))
+  }
+
+  const tabs = ['matches', 'players', 'groups', 'changelog']
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
@@ -200,12 +227,12 @@ export default function Admin() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6">
+      <div className="flex gap-2 mb-6 flex-wrap">
         {tabs.map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-5 py-2 rounded-xl text-sm font-semibold capitalize transition-all
               ${tab === t ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
-            {t === 'matches' ? '⚽ Matches' : t === 'players' ? '👥 Players' : '🏟️ Groups'}
+            {t === 'matches' ? '⚽ Matches' : t === 'players' ? '👥 Players' : t === 'groups' ? '🏟️ Groups' : '✨ Changelog'}
           </button>
         ))}
       </div>
@@ -279,34 +306,59 @@ export default function Admin() {
         </div>
       )}
 
-      {/* Groups tab */}
-      {tab === 'groups' && (
-        <div className="space-y-4">
-          <div className="card p-5">
-            <h3 className="font-bold mb-3">Add new group</h3>
-            <div className="flex gap-3">
-              <input value={newGroup.code} onChange={e => setNewGroup(p => ({...p, code: e.target.value}))}
-                placeholder="Code e.g. SAP-WDF"
-                className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-green-500" />
-              <input value={newGroup.name} onChange={e => setNewGroup(p => ({...p, name: e.target.value}))}
-                placeholder="Group name"
-                className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-green-500" />
-              <button onClick={addGroup} className="btn-primary whitespace-nowrap">Add</button>
+      {/* Changelog tab */}
+      {tab === 'changelog' && (
+        <div className="space-y-6">
+          {/* Add new entry */}
+          <div className="card p-5 space-y-3">
+            <h3 className="font-bold">Add Release Entry</h3>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <input value={newEntry.version} onChange={e => setNewEntry(p => ({...p, version: e.target.value}))}
+                placeholder="Version e.g. 1.3.0"
+                className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-green-500" />
+              <input value={newEntry.title} onChange={e => setNewEntry(p => ({...p, title: e.target.value}))}
+                placeholder="Title e.g. Live Scores Update"
+                className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-green-500" />
+            </div>
+            <textarea value={newEntry.items} onChange={e => setNewEntry(p => ({...p, items: e.target.value}))}
+              placeholder="Bullet points — one per line&#10;e.g. Added live score updates&#10;Fixed leaderboard refresh"
+              rows={4}
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-green-500 resize-none" />
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={newEntry.is_major} onChange={e => setNewEntry(p => ({...p, is_major: e.target.checked}))}
+                  className="w-4 h-4 accent-green-500" />
+                Major release (starred on timeline)
+              </label>
+              <button onClick={addChangelog} className="btn-primary !py-2 !px-5">Publish Entry</button>
             </div>
           </div>
-          <div className="card divide-y divide-slate-800">
-            {groups.map(g => (
-              <div key={g.id} className="flex items-center justify-between px-4 py-3">
-                <div>
-                  <p className="font-semibold">{g.name}</p>
-                  <p className="text-xs text-slate-400">Code: <span className="font-mono bg-slate-800 px-1 rounded">{g.code}</span></p>
+
+          {/* Existing entries */}
+          <div className="space-y-3">
+            {changelog.map(e => {
+              const items = Array.isArray(e.items) ? e.items : JSON.parse(e.items || '[]')
+              return (
+                <div key={e.id} className="card p-4 flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="font-mono text-xs bg-slate-800 px-2 py-0.5 rounded">v{e.version}</span>
+                      {e.is_major && <span className="text-xs text-green-400">★ Major</span>}
+                      <span className="font-bold">{e.title}</span>
+                      <span className="text-xs text-slate-500">{new Date(e.released_at).toLocaleDateString()}</span>
+                    </div>
+                    <ul className="text-xs text-slate-400 space-y-0.5">
+                      {items.map((item, i) => <li key={i} className="flex gap-1.5"><span className="text-green-600">✓</span>{item}</li>)}
+                    </ul>
+                  </div>
+                  <button onClick={() => deleteChangelog(e.id)} className="text-red-500 hover:text-red-400 text-xs shrink-0">Delete</button>
                 </div>
-                <button onClick={() => deleteGroup(g.id)} className="text-red-500 hover:text-red-400 text-xs font-medium">Delete</button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
     </div>
   )
 }
+
