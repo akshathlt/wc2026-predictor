@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
@@ -5,6 +6,14 @@ export default function Navbar() {
   const { session, player, signOut } = useAuth()
   const location = useLocation()
   const nav = useNavigate()
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   const links = [
     { to: '/',            label: '🏠 Home'         },
@@ -28,7 +37,7 @@ export default function Navbar() {
           ⚽ <span className="text-green-400">WC</span>2026
         </Link>
 
-        {/* Nav links — scrollable on mobile */}
+        {/* Nav links */}
         <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide text-sm font-medium flex-1">
           {links.map(l => (
             <Link key={l.to} to={l.to}
@@ -39,17 +48,36 @@ export default function Navbar() {
         </div>
 
         {/* Auth */}
-        <div className="flex items-center gap-3 text-sm shrink-0">
+        <div className="flex items-center shrink-0" ref={ref}>
           {session ? (
-            <>
-              <span className="hidden sm:block text-slate-400 truncate max-w-[140px]">
-                👤 {player?.display_name || session.user.email}
-              </span>
-              <button onClick={() => { signOut(); nav('/') }}
-                className="btn-secondary !py-1 !px-3 text-xs">
-                Sign out
+            <div className="relative">
+              <button onClick={() => setOpen(o => !o)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-700 hover:border-slate-500 transition-colors text-sm">
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" className="text-slate-300">
+                  <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+                </svg>
+                <span className="hidden sm:block text-slate-300 max-w-[120px] truncate">
+                  {player?.display_name || session.user.email}
+                </span>
+                <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24" className="text-slate-500">
+                  <path d="M7 10l5 5 5-5z"/>
+                </svg>
               </button>
-            </>
+
+              {open && (
+                <div className="absolute right-0 mt-2 w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-xl py-2 z-50">
+                  <div className="px-4 py-2 border-b border-slate-700">
+                    <p className="text-xs text-slate-500">Signed in as</p>
+                    <p className="text-sm font-semibold text-white truncate">{player?.display_name || '—'}</p>
+                    <p className="text-xs text-slate-400 truncate">{session.user.email}</p>
+                  </div>
+                  <button onClick={() => { setOpen(false); signOut(); nav('/') }}
+                    className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-800 transition-colors">
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
           ) : (
             <Link to="/auth" className="btn-primary !py-1 !px-4 text-xs">Sign in</Link>
           )}

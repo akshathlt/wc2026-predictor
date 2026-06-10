@@ -4,10 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>⚽ World Cup 2026 Predictor</title>
+    <script>
+      (function() {
+        var redirect = sessionStorage.redirect;
+        delete sessionStorage.redirect;
+        if (redirect && redirect !== location.href) {
+          history.replaceState(null, null, redirect);
+        }
+      }());
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
-    <script type="module" crossorigin src="/wc2026-predictor/assets/index-BvFNXBGh.js"></script>
-    <link rel="stylesheet" crossorigin href="/wc2026-predictor/assets/index-CvwT1n_-.css">
+    <script type="module" crossorigin src="/wc2026-predictor/assets/index-Cx7YM8la.js"></script>
+    <link rel="stylesheet" crossorigin href="/wc2026-predictor/assets/index-DGgQw0tj.css">
   </head>
   <body>
     <div id="root"></div>
