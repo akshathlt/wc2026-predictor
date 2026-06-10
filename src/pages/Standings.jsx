@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import KnockoutBracket from '../components/KnockoutBracket'
 
 const STANDINGS_URL = 'https://api.fifa.com/api/v3/calendar/17/285023/289273/standing?language=en&count=200'
 const FLAG_URL = (code) => `https://api.fifa.com/api/v3/picture/flags-sq-1/${code}`
@@ -134,6 +135,13 @@ export default function Standings() {
         {sortedGroups.map(([g, teams]) => (
           <GroupTable key={g} groupName={g} teams={teams} />
         ))}
+      </div>
+
+      {/* Knockout Bracket */}
+      <div className="mt-12">
+        <h2 className="text-2xl font-black mb-1">🏆 Knockout Bracket</h2>
+        <p className="text-slate-400 text-sm mb-4">Live from FIFA · Updates as teams advance</p>
+        <KnockoutBracket />
       </div>
     </div>
   )
