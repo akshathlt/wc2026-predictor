@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { AVATAR_STYLES, avatarUrl } from '../lib/avatar'
 
@@ -56,6 +57,7 @@ function AvatarPicker({ seed, style, onStyleChange }) {
 
 export default function OnboardModal() {
   const { session, createProfile, signOut } = useAuth()
+  const navigate = useNavigate()
   const [name,    setName]    = useState('')
   const [code,    setCode]    = useState('')
   const [style,   setStyle]   = useState('adventurer')
@@ -70,12 +72,17 @@ export default function OnboardModal() {
       })
   }, [])
 
-  // ESC to cancel (signs out)
+  const handleCancel = async () => {
+    await signOut()
+    navigate('/')
+  }
+
+  // ESC to cancel
   useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') signOut() }
+    const handler = (e) => { if (e.key === 'Escape') handleCancel() }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [signOut])
+  }, [])
 
   const submit = async (e) => {
     e.preventDefault()
@@ -95,7 +102,7 @@ export default function OnboardModal() {
         {/* Close / cancel button */}
         <button
           type="button"
-          onClick={signOut}
+          onClick={handleCancel}
           title="Cancel (signs you out)"
           className="absolute top-3 right-3 text-slate-500 hover:text-white transition-colors p-1 rounded-lg hover:bg-slate-700"
         >
