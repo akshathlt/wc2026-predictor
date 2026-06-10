@@ -19,6 +19,8 @@ export default function Navbar() {
     { to: '/',            label: '🏠 Home'         },
     { to: '/predict',     label: '📋 Groups'        },
     { to: '/matches',     label: '⚽ Matches'       },
+    { to: '/fixtures',    label: '📅 Fixtures'      },
+    { to: '/standings',   label: '📊 Standings'     },
     { to: '/leaderboard', label: '🏆 Leaderboard'   },
     { to: '/rules',       label: '📖 Rules'         },
     ...(player?.is_admin ? [{ to: '/admin', label: '⚙️ Admin' }] : []),

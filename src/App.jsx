@@ -9,6 +9,8 @@ import Leaderboard from './pages/Leaderboard'
 import Rules from './pages/Rules'
 import Admin from './pages/Admin'
 import MatchPredict from './pages/MatchPredict'
+import Fixtures from './pages/Fixtures'
+import Standings from './pages/Standings'
 import OnboardModal from './components/OnboardModal'
 import ForceChangePasswordModal from './components/ForceChangePasswordModal'
 import ChangePassword from './pages/ChangePassword'
@@ -40,6 +42,8 @@ function Inner() {
             <Route path="/matches"    element={session ? <MatchPredict /> : <Navigate to="/auth" />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/rules"      element={<Rules />} />
+            <Route path="/fixtures"   element={<Fixtures />} />
+            <Route path="/standings"  element={<Standings />} />
             <Route path="/admin"      element={session && player?.is_admin ? <Admin /> : <Navigate to="/" />} />
             <Route path="/change-password" element={<ChangePassword />} />
             <Route path="*"           element={<Navigate to="/" />} />
