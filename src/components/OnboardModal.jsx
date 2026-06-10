@@ -55,7 +55,7 @@ function AvatarPicker({ seed, style, onStyleChange }) {
 }
 
 export default function OnboardModal() {
-  const { session, createProfile } = useAuth()
+  const { session, createProfile, signOut } = useAuth()
   const [name,    setName]    = useState('')
   const [code,    setCode]    = useState('')
   const [style,   setStyle]   = useState('adventurer')
@@ -69,6 +69,13 @@ export default function OnboardModal() {
         if (data?.length > 0) { setGroups(data); setCode(data[0].code) }
       })
   }, [])
+
+  // ESC to cancel (signs out)
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') signOut() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [signOut])
 
   const submit = async (e) => {
     e.preventDefault()
@@ -84,7 +91,18 @@ export default function OnboardModal() {
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="card p-6 max-w-lg w-full my-4">
+      <div className="card p-6 max-w-lg w-full my-4 relative">
+        {/* Close / cancel button */}
+        <button
+          type="button"
+          onClick={signOut}
+          title="Cancel (signs you out)"
+          className="absolute top-3 right-3 text-slate-500 hover:text-white transition-colors p-1 rounded-lg hover:bg-slate-700"
+        >
+          <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
         <div className="text-5xl text-center mb-3">⚽</div>
         <h2 className="text-2xl font-bold text-center mb-1">Almost there!</h2>
         <p className="text-slate-400 text-center text-sm mb-5">
