@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { avatarUrl } from '../lib/avatar'
+import Avatar from '../components/Avatar'
 
 const MEDALS = ['🥇','🥈','🥉']
 
@@ -94,9 +95,7 @@ function PlayerRow({ p, rank, isMe }) {
         {rank <= 3 ? MEDALS[rank-1] : <span className="text-slate-400 text-sm">{rank}</span>}
       </span>
       {/* Avatar */}
-      <div className="w-9 h-9 rounded-full overflow-hidden bg-slate-800 border border-slate-700 flex-shrink-0">
-        <img src={avatarUrl(avatarStyle, seed)} alt={p.display_name} className="w-full h-full object-cover" />
-      </div>
+      <Avatar style={avatarStyle} name={seed} size="md" />
       <div className="flex-1 min-w-0">
         <p className="font-semibold truncate">
           {p.display_name}

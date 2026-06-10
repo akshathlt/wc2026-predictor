@@ -97,19 +97,20 @@ export default function OnboardModal() {
   const seed = name.trim() || session?.user?.email?.split('@')[0] || 'player'
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="card p-6 max-w-lg w-full my-4 relative">
-        {/* Close / cancel button */}
-        <button
-          type="button"
-          onClick={handleCancel}
-          title="Cancel (signs you out)"
-          className="absolute top-3 right-3 text-slate-500 hover:text-white transition-colors p-1 rounded-lg hover:bg-slate-700"
-        >
-          <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M18 6L6 18M6 6l12 12"/>
-          </svg>
-        </button>
+    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto">
+      {/* Fixed close button — always visible top-right of screen */}
+      <button
+        type="button"
+        onClick={handleCancel}
+        title="Cancel"
+        className="fixed top-4 right-4 z-[101] text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 transition-colors p-2 rounded-xl"
+      >
+        <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+
+      <div className="card p-6 max-w-lg w-full my-8">
         <div className="text-5xl text-center mb-3">⚽</div>
         <h2 className="text-2xl font-bold text-center mb-1">Almost there!</h2>
         <p className="text-slate-400 text-center text-sm mb-5">

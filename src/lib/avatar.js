@@ -22,3 +22,12 @@ export function avatarUrl(style, seed) {
   const k = seed  || 'player'
   return `https://api.dicebear.com/9.x/${s}/svg?seed=${encodeURIComponent(k)}&size=80`
 }
+
+// Returns initials (up to 2 chars) for use when avatar fails to load
+export function avatarInitials(name) {
+  if (!name) return '?'
+  const parts = name.trim().split(/\s+/)
+  return parts.length > 1
+    ? (parts[0][0] + parts[1][0]).toUpperCase()
+    : name.slice(0, 2).toUpperCase()
+}

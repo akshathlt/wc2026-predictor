@@ -19,7 +19,7 @@ export function AuthProvider({ children }) {
       .from('players')
       .select('*')
       .eq('user_id', session.user.id)
-      .single()
+      .maybeSingle()                        // returns null (not 406) when no row exists
       .then(({ data }) => setPlayer(data))
   }, [session])
 

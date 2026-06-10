@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { fetchWithFallback } from '../lib/fetchWithFallback'
 
 const MATCHES_URL = 'https://api.fifa.com/api/v3/calendar/matches?language=en&count=200&idSeason=285023'
 const STANDINGS_URL = 'https://api.fifa.com/api/v3/calendar/17/285023/289273/standing?language=en&count=200'
@@ -186,52 +187,67 @@ export default function Fixtures() {
 
   useEffect(() => {
     Promise.all([
-      fetch(MATCHES_URL).then(r => r.json()),
-      fetch(STANDINGS_URL).then(r => r.json()),
+      fetchWithFallback(MATCHES_URL),
+      fetchWithFallback(STANDINGS_URL),
     ]).then(([mData, sData]) => {
-      // Parse matches
-      const parsed = (mData.Results || []).map(m => ({
-        date: m.Date,
-        home: m.Home?.ShortClubName,
-        away: m.Away?.ShortClubName,
-        homeCode: m.Home?.IdCountry,
-        awayCode: m.Away?.IdCountry,
-        homeScore: m.Home?.Score,
-        awayScore: m.Away?.Score,
-        stageName: m.StageName?.[0]?.Description || '',
-        groupName: m.GroupName?.[0]?.Description || '',
-        venue: m.Stadium ? `${m.Stadium.Name?.[0]?.Description} (${m.Stadium.CityName?.[0]?.Description})` : '',
-        matchNum: m.MatchNumber,
-        stage: m.StageName?.[0]?.Description === 'First Stage' ? 'group' : 'knockout',
-        placeholderA: m.PlaceHolderA,
-        placeholderB: m.PlaceHolderB,
-      }))
-      setMatches(parsed)
+      if (mData) {
+        const parsed = (mData.Results || []).map(m => ({
+          date: m.Date,
+          home: m.Home?.ShortClubName,
+          away: m.Away?.ShortClubName,
+          homeCode: m.Home?.IdCountry,
+          awayCode: m.Away?.IdCountry,
+          homeScore: m.Home?.Score,
+          awayScore: m.Away?.Score,
+          stageName: m.StageName?.[0]?.Description || '',
+          groupName: m.GroupName?.[0]?.Description || '',
+          venue: m.Stadium ? `${m.Stadium.Name?.[0]?.Description} (${m.Stadium.CityName?.[0]?.Description})` : '',
+          matchNum: m.MatchNumber,
+          stage: m.StageName?.[0]?.Description === 'First Stage' ? 'group' : 'knockout',
+          placeholderA: m.PlaceHolderA,
+          placeholderB: m.PlaceHolderB,
+        }))
+        setMatches(parsed)
+      } else {
+        setError('fifa_unavailable')
+      }
 
-      // Parse standings
-      const parsedS = (sData.Results || []).map(r => ({
-        group: r.Group?.[0]?.Description || '',
-        position: r.Position,
-        team: r.Team?.ShortClubName,
-        code: r.Team?.Abbreviation,
-        played: r.Played,
-        won: r.Won,
-        drawn: r.Drawn,
-        lost: r.Lost,
-        gf: r.For,
-        ga: r.Against,
-        gd: (r.For || 0) - (r.Against || 0),
-        points: r.Points,
-      }))
-      setStandings(parsedS)
+      if (sData) {
+        const parsedS = (sData.Results || []).map(r => ({
+          group: r.Group?.[0]?.Description || '',
+          position: r.Position,
+          team: r.Team?.ShortClubName,
+          code: r.Team?.Abbreviation,
+          played: r.Played,
+          won: r.Won,
+          drawn: r.Drawn,
+          lost: r.Lost,
+          gf: r.For,
+          ga: r.Against,
+          gd: (r.For || 0) - (r.Against || 0),
+          points: r.Points,
+        }))
+        setStandings(parsedS)
+      }
       setLoading(false)
-    }).catch(e => { setError(e.message); setLoading(false) })
+    })
   }, [])
 
   if (loading) return (
     <div className="max-w-4xl mx-auto px-4 py-16 text-center">
       <div className="text-5xl animate-spin mb-4">⚽</div>
       <p className="text-slate-400">Loading fixtures…</p>
+    </div>
+  )
+
+  if (error === 'fifa_unavailable') return (
+    <div className="max-w-4xl mx-auto px-4 py-16 text-center">
+      <div className="text-5xl mb-4">🌐</div>
+      <h2 className="text-xl font-bold mb-2">FIFA API Unavailable</h2>
+      <p className="text-slate-400 text-sm mb-4">Live fixture data couldn't be loaded right now. This can happen if the FIFA API is temporarily down or rate-limited.</p>
+      <button onClick={() => { setError(null); setLoading(true); window.location.reload() }}
+        className="btn-primary">Try again</button>
+      <p className="text-slate-600 text-xs mt-4">Data source: api.fifa.com · Check back in a few minutes</p>
     </div>
   )
 

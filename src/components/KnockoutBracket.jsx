@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { fetchWithFallback } from '../lib/fetchWithFallback'
 
 const BRACKET_URL = 'https://api.fifa.com/api/v3/seasonbracket/season/285023?language=en'
 const FLAG = (code) => `https://api.fifa.com/api/v3/picture/flags-sq-1/${code}`
@@ -176,7 +177,7 @@ export default function KnockoutBracket() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(BRACKET_URL).then(r => r.json()).then(d => { setData(d); setLoading(false) }).catch(() => setLoading(false))
+    fetchWithFallback(BRACKET_URL).then(d => { setData(d); setLoading(false) })
   }, [])
 
   if (loading) return (
@@ -185,7 +186,13 @@ export default function KnockoutBracket() {
       <p className="text-slate-400 text-sm">Loading bracket…</p>
     </div>
   )
-  if (!data) return <p className="text-center text-slate-500 py-6">Could not load bracket.</p>
+  if (!data) return (
+    <div className="py-8 text-center">
+      <div className="text-4xl mb-3">🌐</div>
+      <p className="text-slate-400 text-sm">Bracket data unavailable — FIFA API may be temporarily down.</p>
+      <button onClick={() => window.location.reload()} className="btn-secondary mt-3 !py-1.5 !px-4 text-xs">Retry</button>
+    </div>
+  )
 
   const ks = data.KnockoutStages || []
   const byNum = {}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import KnockoutBracket from '../components/KnockoutBracket'
+import { fetchWithFallback } from '../lib/fetchWithFallback'
 
 const STANDINGS_URL = 'https://api.fifa.com/api/v3/calendar/17/285023/289273/standing?language=en&count=200'
 const FLAG_URL = (code) => `https://api.fifa.com/api/v3/picture/flags-sq-1/${code}`
@@ -84,31 +85,29 @@ export default function Standings() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    fetch(STANDINGS_URL)
-      .then(r => r.json())
-      .then(data => {
-        const byGroup = {}
-        for (const r of (data.Results || [])) {
-          const g = r.Group?.[0]?.Description || 'Unknown'
-          if (!byGroup[g]) byGroup[g] = []
-          byGroup[g].push({
-            position: r.Position,
-            team: r.Team?.ShortClubName,
-            code: r.Team?.Abbreviation,
-            played: r.Played || 0,
-            won: r.Won || 0,
-            drawn: r.Drawn || 0,
-            lost: r.Lost || 0,
-            gf: r.For || 0,
-            ga: r.Against || 0,
-            gd: (r.For || 0) - (r.Against || 0),
-            points: r.Points || 0,
-          })
-        }
-        setGroups(byGroup)
-        setLoading(false)
-      })
-      .catch(e => { setError(e.message); setLoading(false) })
+    fetchWithFallback(STANDINGS_URL).then(data => {
+      if (!data) { setError('unavailable'); setLoading(false); return }
+      const byGroup = {}
+      for (const r of (data.Results || [])) {
+        const g = r.Group?.[0]?.Description || 'Unknown'
+        if (!byGroup[g]) byGroup[g] = []
+        byGroup[g].push({
+          position: r.Position,
+          team: r.Team?.ShortClubName,
+          code: r.Team?.Abbreviation,
+          played: r.Played || 0,
+          won: r.Won || 0,
+          drawn: r.Drawn || 0,
+          lost: r.Lost || 0,
+          gf: r.For || 0,
+          ga: r.Against || 0,
+          gd: (r.For || 0) - (r.Against || 0),
+          points: r.Points || 0,
+        })
+      }
+      setGroups(byGroup)
+      setLoading(false)
+    })
   }, [])
 
   if (loading) return (
@@ -120,7 +119,10 @@ export default function Standings() {
 
   if (error) return (
     <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-      <p className="text-red-400">Failed to load standings: {error}</p>
+      <div className="text-5xl mb-4">🌐</div>
+      <h2 className="text-xl font-bold mb-2">FIFA API Unavailable</h2>
+      <p className="text-slate-400 text-sm mb-4">Live standings couldn't be loaded. The FIFA API may be temporarily down.</p>
+      <button onClick={() => window.location.reload()} className="btn-primary">Try again</button>
     </div>
   )
 
