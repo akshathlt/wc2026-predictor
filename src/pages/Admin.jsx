@@ -213,11 +213,15 @@ export default function Admin() {
   }
 
   const resetPlayerPassword = async (p) => {
-    const tempPass = 'WC2026@' + Math.floor(1000 + Math.random() * 9000)
-    if (!window.confirm(`Reset password for ${p.display_name}?\n\nTemp password will be: ${tempPass}\n\nCopy it and share with the user.`)) return
-    await supabase.from('players').update({ must_change_password: true }).eq('id', p.id)
-    setPlayers(prev => prev.map(x => x.id === p.id ? { ...x, must_change_password: true } : x))
-    setMsg(`Temp password for ${p.display_name}: ${tempPass} — set it via SQL ✅`)
+    if (!window.confirm(`Send password reset email to ${p.display_name} (${p.email})?`)) return
+    const { error } = await supabase.auth.resetPasswordForEmail(p.email, {
+      redirectTo: `${window.location.origin}/wc2026-predictor/change-password`
+    })
+    if (error) {
+      setMsg(`Failed: ${error.message}`)
+    } else {
+      setMsg(`✅ Password reset email sent to ${p.email}`)
+    }
   }
 
   return (
