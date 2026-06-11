@@ -40,7 +40,7 @@ export default function Navbar() {
   const links = [
     { to: '/',            label: '🏠 Home'       },
     { to: '/predict',     label: '📋 Groups'      },
-    { to: '/matches',     label: '⚽ Matches'     },
+    { to: '/matches',     label: '⚽ Match Predictions' },
     { to: '/fixtures',    label: '📅 Fixtures'    },
     { to: '/standings',   label: '📊 Standings'   },
     { to: '/leaderboard', label: '🏆 Leaderboard' },

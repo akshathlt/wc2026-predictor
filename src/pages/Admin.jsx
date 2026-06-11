@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { fetchWithFallback } from '../lib/fetchWithFallback'
@@ -9,17 +9,44 @@ const FIFA_MATCHES_URL = 'https://api.fifa.com/api/v3/calendar/matches?language=
 // MatchStatus: 4=FT, 5=FT, 6=FT AET, 7=FT Pen
 const FINISHED_STATUSES = [4, 5, 6, 7]
 
-function Section({ title, icon, open, onToggle, children }) {
+// 3-dot / lines tab bar
+function TabBar({ tabs, active, onChange }) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setMenuOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+  const current = tabs.find(t => t.key === active)
   return (
-    <div className="card overflow-hidden mb-4">
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-800/40 transition-colors"
-      >
-        <span className="font-bold text-base">{icon} {title}</span>
-        <span className="text-slate-500 text-sm">{open ? '▲' : '▼'}</span>
-      </button>
-      {open && <div className="border-t border-slate-800">{children}</div>}
+    <div className="flex items-center gap-3 mb-6">
+      {/* Active tab label */}
+      <h2 className="text-xl font-bold">{current?.icon} {current?.label}</h2>
+      {/* Lines / 3-dot menu */}
+      <div className="relative ml-auto" ref={ref}>
+        <button
+          onClick={() => setMenuOpen(o => !o)}
+          className="flex flex-col justify-center items-center w-9 h-9 rounded-xl border border-slate-700 hover:border-slate-500 gap-1 transition-colors"
+          title="Switch section"
+        >
+          <span className="w-4 h-0.5 bg-slate-300 rounded" />
+          <span className="w-4 h-0.5 bg-slate-300 rounded" />
+          <span className="w-4 h-0.5 bg-slate-300 rounded" />
+        </button>
+        {menuOpen && (
+          <div className="absolute right-0 mt-2 w-44 bg-slate-900 border border-slate-700 rounded-xl shadow-xl py-1.5 z-50">
+            {tabs.map(t => (
+              <button key={t.key} onClick={() => { onChange(t.key); setMenuOpen(false) }}
+                className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2
+                  ${active === t.key ? 'text-green-400 bg-green-900/20' : 'text-slate-300 hover:bg-slate-800'}`}>
+                <span>{t.icon}</span> {t.label}
+                {active === t.key && <span className="ml-auto text-green-400 text-xs">✓</span>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -85,9 +112,12 @@ export default function Admin() {
   const [matches,  setMatches]  = useState([])
   const [players,  setPlayers]  = useState([])
   const [msg,      setMsg]      = useState('')
-  const [sections, setSections] = useState({ matches: true, players: false })
+  const [tab,      setTab]      = useState('matches')
 
-  const toggle = (k) => setSections(s => ({ ...s, [k]: !s[k] }))
+  const TABS = [
+    { key: 'matches', label: 'Matches & Results', icon: '⚽' },
+    { key: 'players', label: `Players (${players.length})`, icon: '👥' },
+  ]
 
   const reloadMatches = () =>
     supabase.from('matches').select('*').order('match_num').then(({ data }) => data && setMatches(data))
@@ -193,7 +223,7 @@ export default function Admin() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-2">
         <h1 className="text-3xl font-black">⚙️ Admin Panel</h1>
         {msg && (
           <div className="flex items-center gap-2">
@@ -203,34 +233,31 @@ export default function Admin() {
         )}
       </div>
 
-      {/* ── Matches Section ── */}
-      <Section title="Matches & Results" icon="⚽" open={sections.matches} onToggle={() => toggle('matches')}>
-        <div className="p-5 space-y-4">
+      {/* 3-lines tab switcher */}
+      <TabBar tabs={TABS} active={tab} onChange={setTab} />
+
+      {/* ── Matches ── */}
+      {tab === 'matches' && (
+        <div className="space-y-4">
           <div className="flex flex-wrap gap-2 items-center justify-between">
-            <p className="text-slate-400 text-sm">Enter real scores after each match. Or sync automatically from FIFA.</p>
+            <p className="text-slate-400 text-sm">Enter real scores after each match, or sync automatically from FIFA.</p>
             <div className="flex gap-2">
-              <button onClick={syncFromFIFA} className="btn-secondary !py-2 !px-4 text-sm">
-                📡 Sync from FIFA API
-              </button>
-              <button onClick={recalcPoints} className="btn-primary !py-2 !px-4 text-sm">
-                🔄 Recalculate Points
-              </button>
+              <button onClick={syncFromFIFA} className="btn-secondary !py-2 !px-4 text-sm">📡 Sync from FIFA API</button>
+              <button onClick={recalcPoints} className="btn-primary !py-2 !px-4 text-sm">🔄 Recalculate Points</button>
             </div>
           </div>
-          <div className="space-y-0 divide-y divide-slate-800 rounded-xl border border-slate-700 px-4">
+          <div className="divide-y divide-slate-800 rounded-xl border border-slate-700 px-4">
             {matches.length === 0
               ? <p className="text-slate-500 text-sm text-center py-6">No matches loaded yet.</p>
-              : matches.map(m => (
-                  <MatchResultForm key={m.id} match={m} onSaved={reloadMatches} />
-                ))
+              : matches.map(m => <MatchResultForm key={m.id} match={m} onSaved={reloadMatches} />)
             }
           </div>
         </div>
-      </Section>
+      )}
 
-      {/* ── Players Section ── */}
-      <Section title={`Players (${players.length})`} icon="👥" open={sections.players} onToggle={() => toggle('players')}>
-        <div className="overflow-x-auto">
+      {/* ── Players ── */}
+      {tab === 'players' && (
+        <div className="card overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-800/60">
               <tr>
@@ -267,7 +294,7 @@ export default function Admin() {
             </tbody>
           </table>
         </div>
-      </Section>
+      )}
     </div>
   )
 }

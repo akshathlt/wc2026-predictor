@@ -5,6 +5,36 @@ import { useAuth } from '../hooks/useAuth'
 const KNOCKOUT_STAGES = ['r32', 'qf', 'sf', '3rd', 'final']
 const isKnockout = (stage) => KNOCKOUT_STAGES.includes(stage)
 
+// Team name → ISO 3166-1 alpha-2 for flagcdn.com
+const TEAM_ISO = {
+  'Mexico': 'mx', 'South Africa': 'za', 'Korea Republic': 'kr', 'Czechia': 'cz',
+  'Canada': 'ca', 'Bosnia and Herzegovina': 'ba', 'Qatar': 'qa', 'Switzerland': 'ch',
+  'Brazil': 'br', 'Morocco': 'ma', 'Haiti': 'ht', 'Scotland': 'gb-sct',
+  'USA': 'us', 'Paraguay': 'py', 'Australia': 'au', 'Türkiye': 'tr',
+  'Germany': 'de', 'Curaçao': 'cw', "Côte d'Ivoire": 'ci', 'Ecuador': 'ec',
+  'Netherlands': 'nl', 'Japan': 'jp', 'Sweden': 'se', 'Tunisia': 'tn',
+  'Belgium': 'be', 'Egypt': 'eg', 'IR Iran': 'ir', 'New Zealand': 'nz',
+  'Spain': 'es', 'Cabo Verde': 'cv', 'Saudi Arabia': 'sa', 'Uruguay': 'uy',
+  'France': 'fr', 'Senegal': 'sn', 'Iraq': 'iq', 'Norway': 'no',
+  'Argentina': 'ar', 'Algeria': 'dz', 'Austria': 'at', 'Jordan': 'jo',
+  'Portugal': 'pt', 'Congo DR': 'cd', 'Uzbekistan': 'uz', 'Colombia': 'co',
+  'England': 'gb-eng', 'Croatia': 'hr', 'Ghana': 'gh', 'Panama': 'pa',
+}
+
+function TeamFlag({ name }) {
+  const iso = TEAM_ISO[name]
+  const [err, setErr] = useState(false)
+  if (!iso || err) return null
+  return (
+    <img
+      src={`https://flagcdn.com/w40/${iso}.png`}
+      onError={() => setErr(true)}
+      alt={name}
+      className="w-7 h-5 object-cover rounded-sm flex-shrink-0"
+    />
+  )
+}
+
 function MatchCard({ match, prediction, onSave, locked }) {
   const [home,          setHome]          = useState(prediction?.predicted_home ?? '')
   const [away,          setAway]          = useState(prediction?.predicted_away ?? '')
@@ -46,8 +76,9 @@ function MatchCard({ match, prediction, onSave, locked }) {
 
       {/* Teams & Score */}
       <div className="flex items-center gap-3 mb-3">
-        <div className="flex-1 text-right">
-          <p className="font-bold text-sm">{match.home_team}</p>
+        <div className="flex-1 flex items-center justify-end gap-2">
+          <p className="font-bold text-sm text-right">{match.home_team}</p>
+          <TeamFlag name={match.home_team} />
         </div>
         <div className="text-center">
           {hasResult ? (
@@ -67,7 +98,8 @@ function MatchCard({ match, prediction, onSave, locked }) {
             </div>
           )}
         </div>
-        <div className="flex-1">
+        <div className="flex-1 flex items-center gap-2">
+          <TeamFlag name={match.away_team} />
           <p className="font-bold text-sm">{match.away_team}</p>
         </div>
       </div>
