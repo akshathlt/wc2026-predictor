@@ -4,17 +4,64 @@ import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import Avatar from './Avatar'
 
+// Dropdown nav item for grouped links
+function NavDropdown({ label, items, location }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+
+  // Close on nav
+  useEffect(() => { setOpen(false) }, [location.pathname])
+
+  const isChildActive = items.some(i => location.pathname === i.to)
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-1 whitespace-nowrap px-3 py-1 text-sm font-medium transition-colors
+          ${isChildActive ? 'text-green-400 border-b-2 border-green-400' : 'text-slate-300 hover:text-white'}`}
+      >
+        {label}
+        <svg width="10" height="10" fill="currentColor" viewBox="0 0 24 24" className="opacity-60">
+          <path d="M7 10l5 5 5-5z"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1.5 w-48 bg-slate-900 border border-slate-700 rounded-xl shadow-xl py-1.5 z-50">
+          {items.map(i => (
+            <Link key={i.to} to={i.to}
+              onClick={() => setOpen(false)}
+              className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors
+                ${location.pathname === i.to
+                  ? 'text-green-400 bg-green-900/20'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
+              {i.label}
+              {location.pathname === i.to && <span className="ml-auto text-green-400 text-xs">✓</span>}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Navbar() {
   const { session, player, signOut } = useAuth()
   const location = useLocation()
   const nav = useNavigate()
-  const [userOpen,   setUserOpen]   = useState(false)
-  const [menuOpen,   setMenuOpen]   = useState(false)
-  const [hasNew,     setHasNew]     = useState(false)
+  const [userOpen, setUserOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [hasNew,   setHasNew]   = useState(false)
   const userRef = useRef(null)
   const menuRef = useRef(null)
 
-  // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e) => {
       if (userRef.current && !userRef.current.contains(e.target)) setUserOpen(false)
@@ -24,7 +71,6 @@ export default function Navbar() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // Close mobile menu on route change
   useEffect(() => { setMenuOpen(false) }, [location.pathname])
 
   useEffect(() => {
@@ -37,14 +83,22 @@ export default function Navbar() {
       })
   }, [])
 
-  const links = [
-    { to: '/',            label: '🏠 Home'       },
-    { to: '/predict',     label: '📋 Groups'      },
-    { to: '/matches',     label: '⚽ Match Predictions' },
-    { to: '/fixtures',    label: '📅 Fixtures'    },
-    { to: '/standings',   label: '📊 Standings'   },
-    { to: '/leaderboard', label: '🏆 Leaderboard' },
-    { to: '/rules',       label: '📖 Rules'       },
+  // Grouped nav structure
+  const predictLinks = [
+    { to: '/predict', label: '📋 Groups' },
+    { to: '/matches', label: '⚽ Match Predictions' },
+  ]
+  const tournamentLinks = [
+    { to: '/fixtures',  label: '📅 Fixtures'  },
+    { to: '/standings', label: '📊 Standings' },
+  ]
+  const allFlatLinks = [
+    { to: '/',            label: '🏠 Home'            },
+    ...predictLinks,
+    ...tournamentLinks,
+    { to: '/leaderboard', label: '🏆 Leaderboard'     },
+    { to: '/rules',       label: '📖 Rules'           },
+    { to: '/whats-new',   label: '✨ What\'s New'     },
     ...(player?.is_admin ? [{ to: '/admin', label: '⚙️ Admin' }] : []),
   ]
 
@@ -67,26 +121,44 @@ export default function Navbar() {
           ⚽ <span className="text-green-400">WC</span>2026
         </Link>
 
-        {/* Desktop nav links */}
-        <div className="hidden md:flex items-center gap-1 overflow-x-auto scrollbar-hide text-sm font-medium flex-1">
-          {links.map(l => (
-            <Link key={l.to} to={l.to}
-              className={`whitespace-nowrap px-3 py-1 transition-colors ${active(l.to)}`}>
-              {l.label}
+        {/* Desktop nav */}
+        <div className="hidden md:flex items-center gap-0.5 text-sm font-medium flex-1">
+
+          <Link to="/" className={`whitespace-nowrap px-3 py-1 transition-colors ${active('/')}`}>
+            🏠 Home
+          </Link>
+
+          {/* Predict dropdown */}
+          <NavDropdown label="🎯 Predict" items={predictLinks} location={location} />
+
+          {/* Tournament dropdown */}
+          <NavDropdown label="🌍 Tournament" items={tournamentLinks} location={location} />
+
+          <Link to="/leaderboard" className={`whitespace-nowrap px-3 py-1 transition-colors ${active('/leaderboard')}`}>
+            🏆 Leaderboard
+          </Link>
+
+          <Link to="/rules" className={`whitespace-nowrap px-3 py-1 transition-colors ${active('/rules')}`}>
+            📖 Rules
+          </Link>
+
+          {player?.is_admin && (
+            <Link to="/admin" className={`whitespace-nowrap px-3 py-1 transition-colors ${active('/admin')}`}>
+              ⚙️ Admin
             </Link>
-          ))}
+          )}
         </div>
 
-        {/* Right side: What's New + User + Hamburger */}
+        {/* Right side */}
         <div className="flex items-center gap-2 shrink-0">
 
-          {/* What's New — always visible */}
+          {/* What's New */}
           <Link to="/whats-new"
             className={`relative hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-sm font-semibold transition-colors
               ${location.pathname === '/whats-new'
                 ? 'border-yellow-500 text-yellow-300 bg-yellow-900/20'
                 : 'border-slate-700 text-slate-300 hover:border-slate-500 hover:text-white'}`}>
-            ✨ What's New
+            ✨
             {hasNew && <span className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />}
           </Link>
 
@@ -145,20 +217,16 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile dropdown menu */}
+      {/* Mobile full menu */}
       {menuOpen && (
         <div className="md:hidden border-t border-slate-800 bg-slate-950 px-2 py-2 space-y-0.5">
-          {links.map(l => (
+          {allFlatLinks.map(l => (
             <Link key={l.to} to={l.to}
-              className={`flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeMobile(l.to)}`}>
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeMobile(l.to)}`}>
               {l.label}
+              {l.to === '/whats-new' && hasNew && <span className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />}
             </Link>
           ))}
-          <Link to="/whats-new"
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeMobile('/whats-new')}`}>
-            ✨ What's New
-            {hasNew && <span className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />}
-          </Link>
         </div>
       )}
     </nav>
