@@ -1,12 +1,12 @@
 import { useEffect, useState, useRef } from 'react'
 import { fetchWithFallback } from '../lib/fetchWithFallback'
 
-const FIFA_MATCHES = 'https://api.fifa.com/api/v3/calendar/matches?language=en&count=20&idSeason=285023'
+const FIFA_MATCHES = 'https://api.fifa.com/api/v3/calendar/matches?language=en&count=200&idSeason=285023'
+const ESPN_NEWS    = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/news?limit=6'
 const FLAG = (code) => `https://api.fifa.com/api/v3/picture/flags-sq-1/${code}`
 
 const STATUS_LABEL = {
-  0: 'Upcoming', 1: 'Upcoming', 3: '🔴 Live', 12: '⏸ HT',
-  4: 'FT', 5: 'FT', 6: 'AET', 7: 'Pen',
+  0:'Upcoming', 1:'Upcoming', 3:'🔴 Live', 12:'⏸ HT', 4:'FT', 5:'FT', 6:'AET', 7:'Pen',
 }
 
 function FlagImg({ code, name }) {
@@ -18,36 +18,30 @@ function FlagImg({ code, name }) {
 function MatchItem({ m }) {
   const home = m.Home?.ShortClubName || '?'
   const away = m.Away?.ShortClubName || '?'
-  const homeCode = m.Home?.IdCountry
-  const awayCode = m.Away?.IdCountry
   const scoreH = m.HomeTeamScore
   const scoreA = m.AwayTeamScore
   const hasScore = scoreH != null && scoreA != null
   const isLive = m.MatchStatus === 3 || m.MatchStatus === 12
   const isFinished = [4,5,6,7].includes(m.MatchStatus)
   const status = STATUS_LABEL[m.MatchStatus] || ''
-  const time = m.Date ? new Date(m.Date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
+  const time = m.Date ? new Date(m.Date).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) : ''
   const group = m.GroupName?.[0]?.Description || m.StageName?.[0]?.Description || ''
 
   return (
-    <div className={`px-3 py-2 border-b border-slate-800 ${isLive ? 'bg-red-950/20' : ''}`}>
+    <div className={`px-3 py-2 border-b border-slate-800/60 ${isLive ? 'bg-red-950/20' : ''}`}>
       <div className="flex items-center gap-1.5">
-        {/* Home */}
         <div className="flex items-center gap-1 flex-1 min-w-0 justify-end">
           <span className={`text-xs truncate ${isFinished && scoreH > scoreA ? 'text-white font-bold' : 'text-slate-300'}`}>{home}</span>
-          <FlagImg code={homeCode} name={home} />
+          <FlagImg code={m.Home?.IdCountry} name={home} />
         </div>
-        {/* Score / time */}
         <div className="flex flex-col items-center w-14 flex-shrink-0">
           {hasScore
             ? <span className={`text-xs font-black ${isLive ? 'text-red-400' : 'text-white'}`}>{scoreH}–{scoreA}</span>
-            : <span className="text-[10px] font-bold text-slate-400">{time}</span>
-          }
-          <span className={`text-[8px] ${isLive ? 'text-red-400' : 'text-slate-600'}`}>{status}</span>
+            : <span className="text-[10px] font-bold text-slate-400">{time}</span>}
+          <span className={`text-[8px] ${isLive ? 'text-red-400 animate-pulse' : 'text-slate-600'}`}>{status}</span>
         </div>
-        {/* Away */}
         <div className="flex items-center gap-1 flex-1 min-w-0">
-          <FlagImg code={awayCode} name={away} />
+          <FlagImg code={m.Away?.IdCountry} name={away} />
           <span className={`text-xs truncate ${isFinished && scoreA > scoreH ? 'text-white font-bold' : 'text-slate-300'}`}>{away}</span>
         </div>
       </div>
@@ -56,28 +50,66 @@ function MatchItem({ m }) {
   )
 }
 
+function NewsItem({ article }) {
+  const img = article.images?.[0]?.url
+  const ago = article.published
+    ? (() => {
+        const diff = Date.now() - new Date(article.published).getTime()
+        const m = Math.floor(diff / 60000)
+        if (m < 60) return m + 'm ago'
+        const h = Math.floor(m / 60)
+        if (h < 24) return h + 'h ago'
+        return Math.floor(h / 24) + 'd ago'
+      })()
+    : ''
+
+  return (
+    <a href={article.links?.web?.href} target="_blank" rel="noopener noreferrer"
+      className="block px-3 py-2 border-b border-slate-800/60 hover:bg-slate-800/30 transition-colors">
+      {img && (
+        <img src={img} alt="" className="w-full h-16 object-cover rounded-lg mb-1.5" onError={e => e.target.remove()} />
+      )}
+      <p className="text-[11px] text-slate-200 font-medium leading-tight line-clamp-2">{article.headline}</p>
+      <p className="text-[9px] text-slate-500 mt-0.5">{ago}</p>
+    </a>
+  )
+}
+
 export default function NewsSidebar() {
   const [matches,  setMatches]  = useState([])
+  const [news,     setNews]     = useState([])
   const [loading,  setLoading]  = useState(true)
-  const [error,    setError]    = useState(false)
   const [hovered,  setHovered]  = useState(false)
+  const [error,    setError]    = useState(false)
   const timerRef = useRef(null)
 
   const load = () => {
     setLoading(true)
-    fetchWithFallback(FIFA_MATCHES).then(data => {
-      if (!data) { setError(true); setLoading(false); return }
-      const now = Date.now()
-      const all = (data.Results || []).map(m => ({
-        ...m,
-        _ts: new Date(m.Date).getTime(),
-        _isLive: m.MatchStatus === 3 || m.MatchStatus === 12,
-        _isDone: [4,5,6,7].includes(m.MatchStatus),
-      }))
-      const live     = all.filter(m => m._isLive)
-      const today    = all.filter(m => !m._isLive && !m._isDone && Math.abs(m._ts - now) < 86400000)
-      const finished = all.filter(m => m._isDone).sort((a,b) => b._ts - a._ts).slice(0, 8)
-      setMatches([...live, ...today, ...finished])
+    Promise.all([
+      fetchWithFallback(FIFA_MATCHES),
+      fetchWithFallback(ESPN_NEWS),
+    ]).then(([matchData, newsData]) => {
+      if (matchData) {
+        const now = Date.now()
+        const all = (matchData.Results || []).map(m => ({
+          ...m,
+          _ts: new Date(m.Date).getTime(),
+          _isLive: m.MatchStatus === 3 || m.MatchStatus === 12,
+          _isDone: [4,5,6,7].includes(m.MatchStatus),
+        }))
+        const live     = all.filter(m => m._isLive)
+        const upcoming = all.filter(m => !m._isLive && !m._isDone && m._ts > now).slice(0, 6)
+        const finished = all.filter(m => m._isDone).sort((a,b) => b._ts - a._ts).slice(0, 5)
+        setMatches([...live, ...upcoming, ...finished])
+        setError(false)
+      } else {
+        setError(true)
+      }
+
+      if (newsData) {
+        setNews((newsData.articles || []).slice(0, 6))
+      }
+
       setLoading(false)
     })
   }
@@ -88,14 +120,8 @@ export default function NewsSidebar() {
     return () => clearInterval(t)
   }, [])
 
-  // Debounce hover out slightly to avoid flicker
-  const handleMouseEnter = () => {
-    clearTimeout(timerRef.current)
-    setHovered(true)
-  }
-  const handleMouseLeave = () => {
-    timerRef.current = setTimeout(() => setHovered(false), 200)
-  }
+  const handleMouseEnter = () => { clearTimeout(timerRef.current); setHovered(true) }
+  const handleMouseLeave = () => { timerRef.current = setTimeout(() => setHovered(false), 200) }
 
   const liveCount = matches.filter(m => m._isLive).length
 
@@ -109,53 +135,75 @@ export default function NewsSidebar() {
       {/* Collapsed strip */}
       {!hovered && (
         <div className="flex flex-col items-center pt-4 gap-3 w-10">
-          <span className="text-base" title="WC2026 Matches">⚽</span>
+          <span className="text-base">⚽</span>
           {liveCount > 0 && (
-            <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[8px] flex items-center justify-center font-bold">{liveCount}</span>
+            <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[8px] flex items-center justify-center font-bold animate-pulse">{liveCount}</span>
           )}
-          {/* Vertical label */}
-          <span
-            className="text-[9px] text-slate-500 font-semibold tracking-widest uppercase"
-            style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
-          >
+          <span className="text-[9px] text-slate-500 font-semibold tracking-widest uppercase"
+            style={{ writingMode:'vertical-rl', transform:'rotate(180deg)' }}>
             Matches
+          </span>
+          <span className="text-base mt-2">📰</span>
+          <span className="text-[9px] text-slate-500 font-semibold tracking-widest uppercase"
+            style={{ writingMode:'vertical-rl', transform:'rotate(180deg)' }}>
+            News
           </span>
         </div>
       )}
 
       {/* Expanded panel */}
       {hovered && (
-        <div className="flex flex-col h-full w-64">
-          {/* Header */}
-          <div className="px-3 py-2.5 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
-            <div>
-              <p className="text-xs font-bold text-green-400 uppercase tracking-widest">⚽ WC2026 Matches</p>
-              <p className="text-slate-500 text-[10px]">via FIFA API · live</p>
+        <div className="flex flex-col h-full w-64 overflow-hidden">
+
+          {/* ── TOP: Matches (50% height) ── */}
+          <div className="flex flex-col" style={{ height: '50%', minHeight: 0 }}>
+            {/* Matches header */}
+            <div className="px-3 py-2 border-b border-slate-800 flex items-center justify-between bg-slate-900 flex-shrink-0">
+              <div>
+                <p className="text-xs font-bold text-green-400 uppercase tracking-widest">⚽ Matches</p>
+                <p className="text-slate-500 text-[9px]">FIFA API · live</p>
+              </div>
+              <button onClick={load} title="Refresh" className="text-slate-500 hover:text-white text-sm">↻</button>
             </div>
-            <button onClick={load} title="Refresh" className="text-slate-500 hover:text-white text-base leading-none">↻</button>
+
+            <div className="overflow-y-auto flex-1">
+              {loading && (
+                <div className="flex justify-center py-6"><div className="text-lg animate-spin">⚽</div></div>
+              )}
+              {error && !loading && (
+                <div className="p-3 text-center text-slate-500 text-xs">
+                  Unavailable · <button onClick={load} className="text-green-400 underline">Retry</button>
+                </div>
+              )}
+              {!loading && !error && matches.length === 0 && (
+                <p className="text-xs text-slate-600 text-center p-4">No matches today.</p>
+              )}
+              {matches.map((m, i) => <MatchItem key={i} m={m} />)}
+            </div>
           </div>
 
-          {/* Content */}
-          <div className="flex-1 overflow-y-auto">
-            {loading && (
-              <div className="flex items-center justify-center py-10">
-                <div className="text-xl animate-spin">⚽</div>
-              </div>
-            )}
-            {error && !loading && (
-              <div className="p-4 text-center text-slate-500 text-xs">
-                <p>FIFA API unavailable.</p>
-                <button onClick={load} className="mt-2 text-green-400 underline text-xs">Retry</button>
-              </div>
-            )}
-            {!loading && !error && matches.length === 0 && (
-              <p className="text-xs text-slate-600 text-center p-4">No matches today.</p>
-            )}
-            {matches.map((m, i) => <MatchItem key={i} m={m} />)}
+          {/* Divider */}
+          <div className="border-t-2 border-slate-700 flex-shrink-0" />
+
+          {/* ── BOTTOM: News (50% height) ── */}
+          <div className="flex flex-col" style={{ height: '50%', minHeight: 0 }}>
+            {/* News header */}
+            <div className="px-3 py-2 border-b border-slate-800 bg-slate-900 flex-shrink-0">
+              <p className="text-xs font-bold text-blue-400 uppercase tracking-widest">📰 Latest News</p>
+              <p className="text-slate-500 text-[9px]">via ESPN</p>
+            </div>
+
+            <div className="overflow-y-auto flex-1">
+              {news.length === 0 && !loading && (
+                <p className="text-xs text-slate-600 text-center p-4">No news available.</p>
+              )}
+              {news.map((a, i) => <NewsItem key={i} article={a} />)}
+            </div>
           </div>
 
-          <div className="px-3 py-1.5 border-t border-slate-800 bg-slate-900 sticky bottom-0">
-            <p className="text-[9px] text-slate-600 text-center">Powered by FIFA API</p>
+          {/* Footer */}
+          <div className="px-3 py-1 border-t border-slate-800 bg-slate-900 flex-shrink-0">
+            <p className="text-[9px] text-slate-600 text-center">FIFA API + ESPN</p>
           </div>
         </div>
       )}
