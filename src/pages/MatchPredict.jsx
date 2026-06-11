@@ -172,7 +172,19 @@ export default function MatchPredict() {
   const [matches, setMatches] = useState([])
   const [preds, setPreds]     = useState({})
   const [jokersLeft, setJokersLeft] = useState(3)
-  const locked = Date.now() > new Date('2026-06-11T19:00:00Z')
+  // Per-match lock: locks 1 hour before each match's own kick-off
+  // Global lock only used as final fallback
+  const GLOBAL_LOCK = new Date('2026-07-19T23:00:00Z') // after the Final
+
+  const isMatchLocked = (match) => {
+    if (match.locked) return true
+    if (!match.match_date) return false
+    // Build UTC kick-off from match_date + match_time
+    const kickoff = new Date(`${match.match_date}T${match.match_time || '00:00'}:00Z`)
+    return Date.now() > kickoff.getTime() - 60 * 60 * 1000 // lock 1hr before
+  }
+
+  const locked = Date.now() > GLOBAL_LOCK
 
   useEffect(() => {
     if (!player) return
@@ -237,7 +249,13 @@ export default function MatchPredict() {
 
       {locked && (
         <div className="mb-6 bg-red-900/30 border border-red-700 rounded-xl p-4 text-red-300 text-sm font-semibold text-center">
-          🔒 Match predictions are locked — tournament has started!
+          🔒 Tournament is over — predictions are fully locked.
+        </div>
+      )}
+
+      {!locked && (
+        <div className="mb-4 bg-blue-900/20 border border-blue-800 rounded-xl p-3 text-blue-300 text-xs text-center">
+          ⏰ Each match locks 1 hour before kick-off · Upcoming matches are still open!
         </div>
       )}
 
@@ -256,7 +274,7 @@ export default function MatchPredict() {
             <div className="grid sm:grid-cols-2 gap-3">
               {ms.map(m => (
                 <MatchCard key={m.id} match={m} prediction={preds[m.id]}
-                  onSave={saveMatch} locked={locked} />
+                  onSave={saveMatch} locked={isMatchLocked(m)} />
               ))}
             </div>
           </div>
