@@ -87,6 +87,7 @@ export default function Navbar() {
   const predictLinks = [
     { to: '/predict', label: '📋 Groups' },
     { to: '/matches', label: '⚽ Match Predictions' },
+    { to: '/bids',    label: '💰 Fun Bidding' },
   ]
   const tournamentLinks = [
     { to: '/fixtures',  label: '📅 Fixtures'  },
