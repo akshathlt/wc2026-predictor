@@ -76,7 +76,7 @@ function GroupCard({ groupName, teams, setTeams, locked }) {
 }
 
 function ThirdPlaceStep({ groupOrder, picks, setPicks }) {
-  const thirds = GROUP_NAMES.map(g => groupOrder[g][2])
+  const thirds = GROUP_NAMES.map(g => groupOrder[g]?.[2]).filter(Boolean)
 
   const toggle = (teamName) => {
     if (picks.includes(teamName)) {
@@ -210,7 +210,11 @@ export default function Predict() {
         GROUP_NAMES.forEach(g => {
           const groupData = data.filter(r => r.group_name === g).sort((a,b) => a.predicted_position - b.predicted_position)
           if (groupData.length === 4) {
-            newOrder[g] = groupData.map(r => WC_GROUPS[g].find(t => t.name === r.team_name) || { name: r.team_name, iso: 'un', rank: 0 })
+            newOrder[g] = groupData
+              .map(r => WC_GROUPS[g].find(t => t.name === r.team_name) || { name: r.team_name, iso: 'un', rank: 0 })
+              .filter(Boolean)
+            // If saved teams don't match current groups, reset to default
+            if (newOrder[g].length !== 4) newOrder[g] = [...WC_GROUPS[g]]
           }
         })
         setGroupOrder(newOrder)
