@@ -1,3 +1,4 @@
+// v2 — per-match locking, cache bust
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
