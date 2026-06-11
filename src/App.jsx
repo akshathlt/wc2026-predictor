@@ -22,6 +22,15 @@ function Inner() {
   const location = useLocation()
   const isChangingPassword = location.pathname === '/change-password'
 
+  // If Supabase redirected to root with a recovery token in the hash, forward to change-password
+  if (typeof window !== 'undefined') {
+    const hash = window.location.hash
+    if (hash.includes('type=recovery') && location.pathname !== '/change-password') {
+      window.location.replace('/wc2026-predictor/change-password' + hash)
+      return null
+    }
+  }
+
   if (session === undefined) {
     return (
       <div className="min-h-screen flex items-center justify-center">
