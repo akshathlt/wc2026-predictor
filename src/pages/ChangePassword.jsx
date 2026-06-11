@@ -23,21 +23,26 @@ function PasswordInput({ value, onChange, placeholder = '•••••••�
 export default function ChangePassword() {
   const navigate  = useNavigate()
   const [ready,    setReady]    = useState(false)
+  const [linkError, setLinkError] = useState('')
   const [password, setPassword] = useState('')
   const [confirm,  setConfirm]  = useState('')
   const [busy,     setBusy]     = useState(false)
   const [err,      setErr]      = useState('')
   const [done,     setDone]     = useState(false)
 
-  // Supabase sends the token in the URL hash: #access_token=...&type=recovery
-  // We need to let Supabase process it and establish the session
   useEffect(() => {
+    // Check URL hash for error (expired/invalid link)
+    const hash = window.location.hash
+    if (hash.includes('error=access_denied') || hash.includes('otp_expired') || hash.includes('error_code=otp_expired')) {
+      setLinkError('This password reset link has expired or already been used.')
+      return
+    }
+
     supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY' || session) {
         setReady(true)
       }
     })
-    // Also check if already has session (direct navigation)
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) setReady(true)
     })
@@ -55,6 +60,21 @@ export default function ChangePassword() {
     setDone(true)
     setTimeout(() => navigate('/'), 2500)
   }
+
+  // Expired / invalid link
+  if (linkError) return (
+    <div className="min-h-[calc(100vh-56px)] flex items-center justify-center p-4">
+      <div className="card p-8 max-w-md w-full text-center">
+        <div className="text-6xl mb-4">⏰</div>
+        <h1 className="text-2xl font-black mb-2">Link Expired</h1>
+        <p className="text-slate-400 mb-6">{linkError}</p>
+        <p className="text-slate-500 text-sm mb-6">Password reset links expire after 1 hour. Please request a new one.</p>
+        <button onClick={() => navigate('/auth')} className="btn-primary w-full">
+          Go to Sign In → Request New Link
+        </button>
+      </div>
+    </div>
+  )
 
   if (!ready) return (
     <div className="min-h-[calc(100vh-56px)] flex items-center justify-center">
