@@ -131,12 +131,14 @@ export default function Admin() {
   const [msg,       setMsg]       = useState('')
   const [tab,       setTab]       = useState('matches')
   const [report,    setReport]    = useState(null)
+  const [syncLogs,  setSyncLogs]  = useState([])
   const [loadingReport, setLoadingReport] = useState(false)
 
   const TABS = [
     { key: 'matches', label: 'Matches & Results', icon: '⚽' },
     { key: 'players', label: `Players (${players.length})`, icon: '👥' },
-    { key: 'reports', label: 'Reports', icon: '📊' },
+    { key: 'reports', label: 'Reports',           icon: '📊' },
+    { key: 'synclog', label: 'Sync Log',           icon: '🕐' },
   ]
 
   const reloadMatches = () =>
@@ -150,6 +152,14 @@ export default function Admin() {
     reloadMatches()
     reloadPlayers()
   }, [player])
+
+  // Load sync log when that tab is opened
+  useEffect(() => {
+    if (tab === 'synclog' && player?.is_admin) {
+      supabase.from('sync_log').select('*').order('synced_at', { ascending: false }).limit(50)
+        .then(({ data }) => data && setSyncLogs(data))
+    }
+  }, [tab, player])
 
   const loadReport = async () => {
     setLoadingReport(true)
@@ -504,6 +514,60 @@ export default function Admin() {
             <div className="card p-12 text-center">
               <p className="text-4xl mb-3">📊</p>
               <p className="text-slate-400">Click "Generate Report" to load prediction and bidding stats.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Sync Log ── */}
+      {tab === 'synclog' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-slate-400 text-sm">GitHub Actions sync history — shows every run of the FIFA auto-sync workflow.</p>
+            <button onClick={() =>
+              supabase.from('sync_log').select('*').order('synced_at', { ascending: false }).limit(50)
+                .then(({ data }) => data && setSyncLogs(data))
+            } className="btn-secondary !py-1.5 !px-4 text-sm">↻ Refresh</button>
+          </div>
+
+          {syncLogs.length === 0 ? (
+            <div className="card p-8 text-center">
+              <p className="text-4xl mb-3">🕐</p>
+              <p className="text-slate-400 text-sm">No sync logs yet.</p>
+              <p className="text-slate-500 text-xs mt-1">Run the SQL in <code className="bg-slate-800 px-1 rounded">supabase/add_last_synced.sql</code> then trigger the GitHub Action.</p>
+            </div>
+          ) : (
+            <div className="card overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-800/60">
+                  <tr>
+                    {['Time (UTC)', 'Source', 'Updated', 'Skipped', 'Message'].map(h => (
+                      <th key={h} className="text-left px-4 py-2.5 text-slate-400 text-xs uppercase whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {syncLogs.map(log => {
+                    const time = new Date(log.synced_at).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit', second:'2-digit' })
+                    const isError = log.message?.toLowerCase().includes('error')
+                    return (
+                      <tr key={log.id} className={`hover:bg-slate-800/30 ${isError ? 'bg-red-900/10' : ''}`}>
+                        <td className="px-4 py-2.5 text-slate-300 text-xs whitespace-nowrap font-mono">{time}</td>
+                        <td className="px-4 py-2.5">
+                          <span className={`text-xs px-2 py-0.5 rounded font-semibold ${log.source === 'github_action' ? 'bg-green-900/50 text-green-300' : 'bg-slate-700 text-slate-300'}`}>
+                            {log.source === 'github_action' ? '🤖 Auto' : '👤 Manual'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 font-bold text-center">
+                          <span className={log.matches_updated > 0 ? 'text-green-400' : 'text-slate-500'}>{log.matches_updated}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-500 text-center">{log.matches_skipped}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-400 max-w-xs truncate">{log.message}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

@@ -62,7 +62,21 @@ jobs:
             }
             console.log(`Sync: ${updated} updated, ${skipped} already up to date`);
 
-            if (updated === 0) { console.log('No new results — skipping recalculation'); return; }
+            if (updated === 0) {
+              console.log('No new results — skipping recalculation');
+              // Still log the run so you can see it ran
+              await query('sync_log', {
+                method: 'POST',
+                headers: { 'Prefer': 'return=minimal' },
+                body: JSON.stringify({
+                  source: 'github_action',
+                  matches_updated: 0,
+                  matches_skipped: skipped,
+                  message: `No new results. ${skipped} already up to date.`
+                })
+              });
+              return;
+            }
 
             // 4. Recalculate points for all players
             console.log('Recalculating points...');
@@ -100,7 +114,34 @@ jobs:
               });
             }
             console.log(`✅ Recalculated points for ${Object.keys(totals).length} players`);
+
+            // 6. Write to sync_log table
+            await query('sync_log', {
+              method: 'POST',
+              headers: { 'Prefer': 'return=minimal' },
+              body: JSON.stringify({
+                source: 'github_action',
+                matches_updated: updated,
+                matches_skipped: skipped,
+                message: `Synced ${updated} results, recalculated ${Object.keys(totals).length} players`
+              })
+            });
+            console.log('✅ Sync log written');
           }
 
-          main().catch(e => { console.error('ERROR:', e.message); process.exit(1); });
+          main().catch(e => {
+            console.error('ERROR:', e.message);
+            // Log failure too
+            fetch(`${SUPABASE_URL}/rest/v1/sync_log`, {
+              method: 'POST',
+              headers: {
+                'apikey': SERVICE_KEY,
+                'Authorization': `Bearer ${SERVICE_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+              },
+              body: JSON.stringify({ source: 'github_action', matches_updated: 0, matches_skipped: 0, message: `ERROR: ${e.message}` })
+            }).catch(()=>{});
+            process.exit(1);
+          });
           EOF
