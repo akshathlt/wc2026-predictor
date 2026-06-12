@@ -11,7 +11,16 @@ function Countdown() {
     return () => clearInterval(t)
   }, [])
 
-  if (diff <= 0) return <span className="text-red-400 font-bold">🔒 Predictions LOCKED</span>
+  // Tournament underway — group/special predictions locked, but match predictions still open per-match
+  if (diff <= 0) return (
+    <div className="space-y-2 text-center">
+      <div className="inline-flex items-center gap-2 bg-green-900/40 border border-green-700 rounded-xl px-5 py-2.5">
+        <span className="text-green-400 text-xl">⚽</span>
+        <span className="text-green-300 font-bold">Tournament Underway!</span>
+      </div>
+      <p className="text-slate-400 text-sm">Group picks locked · Match predictions open until 1hr before each kick-off</p>
+    </div>
+  )
 
   const d = Math.floor(diff / 86400000)
   const h = Math.floor((diff % 86400000) / 3600000)
@@ -55,9 +64,9 @@ export default function Home() {
         </p>
 
         <div className="space-y-3">
-          <p className="text-slate-500 text-sm uppercase tracking-widest font-semibold">Predictions lock in</p>
+          <p className="text-slate-500 text-sm uppercase tracking-widest font-semibold">Tournament Status</p>
           <Countdown />
-          <p className="text-slate-500 text-xs">June 11, 2026 · 3:00 PM ET (first kick-off)</p>
+          <p className="text-slate-500 text-xs">June 11, 2026 · 3:00 PM ET (first kick-off) · Ends July 19</p>
         </div>
 
         {session ? (
