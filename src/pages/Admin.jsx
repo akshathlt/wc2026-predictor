@@ -58,8 +58,16 @@ function MatchResultForm({ match, onSaved }) {
   const [penWinner, setPenWinner] = useState(match.penalty_winner ?? '')
   const [saving,    setSaving]    = useState(false)
 
-  const knockout = KNOCKOUT_STAGES.includes(match.stage)
-  const isDraw   = home !== '' && away !== '' && Number(home) === Number(away)
+  // Sync inputs when match prop updates (e.g. after FIFA sync)
+  useEffect(() => {
+    setHome(match.home_goals ?? '')
+    setAway(match.away_goals ?? '')
+    setPenWinner(match.penalty_winner ?? '')
+  }, [match.home_goals, match.away_goals, match.penalty_winner])
+
+  const hasResult = match.home_goals != null
+  const knockout  = KNOCKOUT_STAGES.includes(match.stage)
+  const isDraw    = home !== '' && away !== '' && Number(home) === Number(away)
 
   const save = async () => {
     setSaving(true)
@@ -82,14 +90,22 @@ function MatchResultForm({ match, onSaved }) {
             {knockout && <span className="ml-1 bg-purple-700/40 text-purple-300 px-1.5 py-0.5 rounded">{stageBadge[match.stage]}</span>}
           </span>
         </div>
+        {/* Score inputs — show green result badge if already saved */}
+        {hasResult && (
+          <span className="text-green-400 font-black text-base px-2">
+            {match.home_goals} – {match.away_goals}
+          </span>
+        )}
         <input type="number" min="0" max="20" value={home} onChange={e => setHome(e.target.value)}
-          className="w-12 bg-slate-800 border border-slate-600 rounded-lg text-center py-1 text-white focus:outline-none focus:border-green-500" />
+          className={`w-12 border rounded-lg text-center py-1 text-white focus:outline-none focus:border-green-500
+            ${hasResult ? 'bg-green-900/30 border-green-700' : 'bg-slate-800 border-slate-600'}`} />
         <span className="text-slate-500">–</span>
         <input type="number" min="0" max="20" value={away} onChange={e => setAway(e.target.value)}
-          className="w-12 bg-slate-800 border border-slate-600 rounded-lg text-center py-1 text-white focus:outline-none focus:border-green-500" />
+          className={`w-12 border rounded-lg text-center py-1 text-white focus:outline-none focus:border-green-500
+            ${hasResult ? 'bg-green-900/30 border-green-700' : 'bg-slate-800 border-slate-600'}`} />
         <button onClick={save} disabled={saving || home === '' || away === ''}
           className="btn-primary !py-1 !px-3 text-xs disabled:opacity-50">
-          {saving ? '…' : 'Save'}
+          {saving ? '…' : hasResult ? 'Update' : 'Save'}
         </button>
       </div>
       {knockout && isDraw && home !== '' && away !== '' && (
