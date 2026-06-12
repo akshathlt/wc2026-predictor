@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react'
-import { fetchWithFallback } from '../lib/fetchWithFallback'
+import { supabase } from '../lib/supabase'
 
-// Use a CORS proxy since KU Leuven doesn't set Access-Control-Allow-Origin
-const KU_LEUVEN_URL = 'https://corsproxy.io/?url=https://dtai.cs.kuleuven.be/sports/worldcup2026/data/predictions.json'
-const KU_LEUVEN_DIRECT = 'https://dtai.cs.kuleuven.be/sports/worldcup2026/data/predictions.json'
 const FLAG_URL = (iso) => `https://flagcdn.com/w40/${iso}.png`
 
 // Team abbreviation → ISO flag code + full name
@@ -57,28 +54,36 @@ export default function Analytics() {
   const [teamB,    setTeamB]    = useState('ARG')
 
   useEffect(() => {
-    // Try CORS proxy first, fall back to direct (works in some browsers)
-    const tryFetch = async () => {
-      let data = await fetchWithFallback(KU_LEUVEN_URL)
-      if (!data) data = await fetchWithFallback(KU_LEUVEN_DIRECT)
-      return data
-    }
-    tryFetch().then(data => {
-      if (!data) { setError(true); setLoading(false); return }
+    const load = async () => {
+      // Read from Supabase (populated by GitHub Action — no CORS issue)
+      const [{ data: predsData }, { data: rawData }] = await Promise.all([
+        supabase.from('analytics_predictions').select('*').order('avg_win', { ascending: false }),
+        supabase.from('analytics_raw').select('data, updated_at').eq('id', 'ku_leuven').single(),
+      ])
 
-      // Compute tournament strength: avg win rate vs all opponents
-      const teams = Object.keys(data)
-      const strength = teams.map(t => {
-        const opponents = Object.keys(data[t] || {})
-        if (!opponents.length) return null
-        const avgWin = opponents.reduce((s, o) => s + (data[t][o]?.win || 0), 0) / opponents.length
-        const meta = TEAM_META[t]
-        return { code: t, name: meta?.name || t, iso: meta?.iso, avgWin: Math.round(avgWin * 100) }
-      }).filter(Boolean).sort((a, b) => b.avgWin - a.avgWin)
+      if (!predsData || predsData.length === 0) {
+        setError(true)
+        setLoading(false)
+        return
+      }
 
-      setKuData({ raw: data, strength, teams })
+      const strength = predsData.map(r => {
+        const meta = TEAM_META[r.team_code]
+        return { code: r.team_code, name: meta?.name || r.team_code, iso: meta?.iso, avgWin: r.avg_win }
+      })
+
+      let rawPairwise = {}
+      if (rawData?.data) {
+        try { rawPairwise = JSON.parse(rawData.data) } catch {}
+      }
+
+      const teams = Object.keys(rawPairwise).filter(t => TEAM_META[t])
+      const updatedAt = rawData?.updated_at ? new Date(rawData.updated_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : null
+
+      setKuData({ raw: rawPairwise, strength, teams, updatedAt })
       setLoading(false)
-    })
+    }
+    load()
   }, [])
 
   if (loading) return (
@@ -90,8 +95,14 @@ export default function Analytics() {
 
   if (error) return (
     <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-      <div className="text-4xl mb-4">🌐</div>
-      <p className="text-slate-400 mb-3">Could not load analytics data.</p>
+      <div className="text-4xl mb-4">🔄</div>
+      <h2 className="text-xl font-bold mb-2">Analytics Loading Soon</h2>
+      <p className="text-slate-400 text-sm mb-4">
+        Data is fetched every 6 hours via a GitHub Action and stored in our database.
+      </p>
+      <p className="text-slate-500 text-xs">
+        If you just deployed, run the <b>Sync Analytics</b> workflow manually from GitHub Actions tab, then run the SQL in <code className="bg-slate-800 px-1 rounded">supabase/analytics_tables.sql</code>
+      </p>
     </div>
   )
 
@@ -107,7 +118,8 @@ export default function Analytics() {
       <h1 className="text-3xl font-black mb-1">📊 Global Analytics</h1>
       <p className="text-slate-400 text-sm mb-6">
         Powered by <a href="https://dtai.cs.kuleuven.be/sports/worldcup2026/" target="_blank" rel="noopener noreferrer"
-          className="text-blue-400 hover:underline">KU Leuven AI</a> — 20,000 tournament simulations · Updated daily
+          className="text-blue-400 hover:underline">KU Leuven AI</a> — 20,000 tournament simulations · Updated every 6 hours via GitHub Action
+        {kuData?.updatedAt && <span className="text-slate-500 ml-1">· Last sync: {kuData.updatedAt}</span>}
       </p>
 
       {/* Tab switcher */}

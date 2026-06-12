@@ -1,0 +1,80 @@
+name: Sync Analytics (KU Leuven Predictions)
+
+on:
+  schedule:
+    # Every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync-analytics:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch KU Leuven predictions and store in Supabase
+        env:
+          SUPABASE_URL: https://neqdmjxbjwxmoiaxzkiy.supabase.co
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          node << 'EOF'
+          const SUPABASE_URL = process.env.SUPABASE_URL
+          const KEY = process.env.SUPABASE_SERVICE_KEY
+          const KU_URL = 'https://dtai.cs.kuleuven.be/sports/worldcup2026/data/predictions.json'
+
+          const headers = {
+            'apikey': KEY,
+            'Authorization': `Bearer ${KEY}`,
+            'Content-Type': 'application/json'
+          }
+
+          async function main() {
+            // Fetch from KU Leuven (no CORS issue server-side)
+            console.log('Fetching KU Leuven predictions...')
+            const r = await fetch(KU_URL)
+            if (!r.ok) { console.error('KU Leuven fetch failed:', r.status); return }
+            const data = await r.json()
+
+            const teams = Object.keys(data)
+            console.log(`Got predictions for ${teams.length} teams`)
+
+            // Compute avg win rate per team = tournament strength proxy
+            const teamStats = teams.map(t => {
+              const opponents = Object.keys(data[t] || {})
+              if (!opponents.length) return null
+              const avgWin  = opponents.reduce((s,o) => s + (data[t][o]?.win||0), 0) / opponents.length
+              const avgTie  = opponents.reduce((s,o) => s + (data[t][o]?.tie||0), 0) / opponents.length
+              const avgLoss = opponents.reduce((s,o) => s + (data[t][o]?.loss||0), 0) / opponents.length
+              return {
+                team_code: t,
+                avg_win:  Math.round(avgWin * 1000) / 10,
+                avg_tie:  Math.round(avgTie * 1000) / 10,
+                avg_loss: Math.round(avgLoss * 1000) / 10,
+                updated_at: new Date().toISOString()
+              }
+            }).filter(Boolean)
+
+            // Upsert into Supabase analytics_predictions table
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/analytics_predictions`, {
+              method: 'POST',
+              headers: { ...headers, 'Prefer': 'resolution=merge-duplicates' },
+              body: JSON.stringify(teamStats)
+            })
+
+            if (res.ok || res.status === 201) {
+              console.log(`✅ Stored ${teamStats.length} team predictions in Supabase`)
+            } else {
+              const err = await res.text()
+              console.error('Supabase upsert failed:', res.status, err)
+            }
+
+            // Store raw pairwise data as JSON blob for head-to-head lookups
+            const blob = JSON.stringify(data)
+            const blobRes = await fetch(`${SUPABASE_URL}/rest/v1/analytics_raw`, {
+              method: 'POST',
+              headers: { ...headers, 'Prefer': 'resolution=merge-duplicates' },
+              body: JSON.stringify([{ id: 'ku_leuven', source: 'KU Leuven', data: blob, updated_at: new Date().toISOString() }])
+            })
+            console.log('Raw blob stored:', blobRes.status)
+          }
+
+          main().catch(e => { console.error('ERROR:', e.message); process.exit(1) })
+          EOF
