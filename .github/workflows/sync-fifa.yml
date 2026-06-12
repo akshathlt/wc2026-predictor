@@ -1,0 +1,106 @@
+name: Auto Sync FIFA Results + Recalculate Points
+
+on:
+  schedule:
+    # Runs every 30 minutes during tournament hours (06:00-23:30 UTC)
+    - cron: '0,30 6-23 * * *'
+  workflow_dispatch: # Allow manual trigger from GitHub Actions tab
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync FIFA results and recalculate points
+        env:
+          SUPABASE_URL: https://neqdmjxbjwxmoiaxzkiy.supabase.co
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          node << 'EOF'
+          const SUPABASE_URL = process.env.SUPABASE_URL;
+          const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY;
+          const FIFA_URL = 'https://api.fifa.com/api/v3/calendar/matches?language=en&count=200&idSeason=285023';
+
+          const headers = {
+            'apikey': SERVICE_KEY,
+            'Authorization': `Bearer ${SERVICE_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          };
+
+          async function query(path, opts = {}) {
+            const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: { ...headers, ...opts.headers }, ...opts });
+            if (!r.ok) { const t = await r.text(); throw new Error(`${r.status} ${path}: ${t}`); }
+            return opts.method && opts.method !== 'GET' ? null : r.json();
+          }
+
+          async function main() {
+            // 1. Fetch FIFA scores
+            console.log('Fetching FIFA API...');
+            const fifa = await fetch(FIFA_URL).then(r => r.json());
+            const fifaWithScores = (fifa.Results || []).filter(m => m.HomeTeamScore != null && m.AwayTeamScore != null);
+            console.log(`FIFA matches with scores: ${fifaWithScores.length}`);
+
+            // 2. Get DB matches
+            const dbMatches = await query('matches?select=id,match_num,home_goals,away_goals,home_team,away_team');
+            console.log(`DB matches: ${dbMatches.length}`);
+
+            // 3. Sync new/changed results
+            let updated = 0, skipped = 0;
+            for (const fm of fifaWithScores) {
+              const dbMatch = dbMatches.find(m => m.match_num === fm.MatchNumber);
+              if (!dbMatch) continue;
+              if (dbMatch.home_goals === fm.HomeTeamScore && dbMatch.away_goals === fm.AwayTeamScore) { skipped++; continue; }
+
+              const update = { home_goals: fm.HomeTeamScore, away_goals: fm.AwayTeamScore, locked: true };
+              if (fm.ResultType === 2 && fm.HomeTeamPenaltyScore != null) {
+                update.penalty_winner = fm.HomeTeamPenaltyScore > fm.AwayTeamPenaltyScore
+                  ? fm.Home?.ShortClubName : fm.Away?.ShortClubName;
+              }
+              await query(`matches?id=eq.${dbMatch.id}`, { method: 'PATCH', body: JSON.stringify(update) });
+              console.log(`✅ Synced M${fm.MatchNumber}: ${fm.Home?.ShortClubName} ${fm.HomeTeamScore}-${fm.AwayTeamScore} ${fm.Away?.ShortClubName}`);
+              updated++;
+            }
+            console.log(`Sync: ${updated} updated, ${skipped} already up to date`);
+
+            if (updated === 0) { console.log('No new results — skipping recalculation'); return; }
+
+            // 4. Recalculate points for all players
+            console.log('Recalculating points...');
+            const finishedMatches = await query('matches?select=*&home_goals=not.is.null');
+            const allPreds = await query('match_predictions?select=*');
+
+            const totals = {};
+            for (const match of finishedMatches) {
+              const mPreds = allPreds.filter(p => p.match_id === match.id);
+              for (const pred of mPreds) {
+                let pts = 0;
+                const realDiff = match.home_goals - match.away_goals;
+                const predDiff = pred.predicted_home - pred.predicted_away;
+                if (Math.sign(predDiff) === Math.sign(realDiff)) pts += 2;
+                if (predDiff === realDiff) pts += 1;
+                if (pred.predicted_home === match.home_goals && pred.predicted_away === match.away_goals) pts += 2;
+                let penPts = 0;
+                const KNOCKOUT = ['r32','qf','sf','3rd','final'];
+                if (KNOCKOUT.includes(match.stage) && match.home_goals === match.away_goals) {
+                  if (predDiff === 0) penPts += 5;
+                  if (match.penalty_winner && pred.penalty_winner === match.penalty_winner) penPts += 5;
+                }
+                if (pred.joker_used) { pts *= 2; penPts *= 2; }
+                await query(`match_predictions?id=eq.${pred.id}`, {
+                  method: 'PATCH', body: JSON.stringify({ total_pts: pts, penalty_pts: penPts })
+                });
+                totals[pred.player_id] = (totals[pred.player_id] || 0) + pts + penPts;
+              }
+            }
+
+            // 5. Update player totals
+            for (const [pid, pts] of Object.entries(totals)) {
+              await query(`players?id=eq.${pid}`, {
+                method: 'PATCH', body: JSON.stringify({ stage_pts: pts, total_pts: pts })
+              });
+            }
+            console.log(`✅ Recalculated points for ${Object.keys(totals).length} players`);
+          }
+
+          main().catch(e => { console.error('ERROR:', e.message); process.exit(1); });
+          EOF
