@@ -574,24 +574,19 @@ export default function Leaderboard() {
 </body>
 </html>`
 
-    // Open as data URI in new tab so user can copy-paste to Outlook
-    const blob = new Blob([html], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    window.open(url, '_blank')
-
-    // Also open mailto as fallback
-    const subject = encodeURIComponent(`⚽ WC2026 Predictor – Daily Standings | ${today}`)
-    const textBody = encodeURIComponent(
-`${theme.header} — ${today}
-
-${top5.map((p,i)=>`${medals[i]} #${i+1} ${p.display_name} — ${p.total_pts} pts`).join('\n')}
-
-Gap: ${gap} pts · Total players: ${totalPlayers}
-Full leaderboard: https://akshathlt.github.io/wc2026-predictor/leaderboard
-
-⚽ Predict upcoming matches: https://akshathlt.github.io/wc2026-predictor/matches`)
-
-    setTimeout(() => { window.location.href = `mailto:?subject=${subject}&body=${textBody}` }, 500)
+    // Copy HTML to clipboard so admin can paste directly into Outlook (Ctrl+V)
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([html], { type: 'text/plain' }) })
+      ])
+      alert('✅ Email HTML copied to clipboard!\n\nNow:\n1. Open Outlook → New Email\n2. Paste (Ctrl+V) into the email body\n3. Add recipients and send!')
+    } catch {
+      // Fallback: open in new tab for manual copy
+      const blob = new Blob([html], { type: 'text/html' })
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank')
+      alert('📋 Email opened in new tab.\n\nSelect All (Ctrl+A) → Copy (Ctrl+C) → Paste into Outlook')
+    }
   }
 
   return (
@@ -616,7 +611,7 @@ Full leaderboard: https://akshathlt.github.io/wc2026-predictor/leaderboard
         {players.length > 0 && player?.is_admin && (
           <button onClick={sendDailyEmail}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all bg-blue-700 hover:bg-blue-600 text-white">
-            📧 Send Daily Update
+            📋 Copy Email for Outlook
           </button>
         )}
       </div>
