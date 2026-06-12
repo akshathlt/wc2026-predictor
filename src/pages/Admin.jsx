@@ -213,42 +213,44 @@ export default function Admin() {
     setLoadingReport(false)
   }
   const syncFromFIFA = async () => {
-    setMsg('Fetching results from FIFA API…')
+    setMsg('Checking FIFA API for new results…')
     const data = await fetchWithFallback(FIFA_MATCHES_URL)
     if (!data) { setMsg('FIFA API unavailable — try again later.'); return }
 
-    // Use score presence as primary check — FIFA uses status=0 for finished matches
-    const fifaMatches = (data.Results || []).filter(m =>
+    // Only matches with scores in the API
+    const fifaWithScores = (data.Results || []).filter(m =>
       m.HomeTeamScore != null && m.AwayTeamScore != null
     )
-    if (fifaMatches.length === 0) { setMsg('No completed matches with scores found in FIFA API yet.'); return }
+    if (fifaWithScores.length === 0) { setMsg('No completed matches found in FIFA API yet.'); return }
 
     let updated = 0
-    for (const fm of fifaMatches) {
-      const homeScore = fm.HomeTeamScore
-      const awayScore = fm.AwayTeamScore
-      if (homeScore == null || awayScore == null) continue
-
-      const homeName = fm.Home?.ShortClubName
-      const match = matches.find(m =>
-        m.home_team?.toLowerCase() === homeName?.toLowerCase() ||
-        m.match_num === fm.MatchNumber
-      )
+    let skipped = 0
+    for (const fm of fifaWithScores) {
+      // Find matching DB record by match number (most reliable)
+      const match = matches.find(m => m.match_num === fm.MatchNumber)
       if (!match) continue
 
-      const update = { home_goals: homeScore, away_goals: awayScore, locked: true }
-      // Penalty: ResultType 2 = Penalties
+      // Skip if DB already has this exact result — no need to update
+      if (match.home_goals === fm.HomeTeamScore && match.away_goals === fm.AwayTeamScore) {
+        skipped++
+        continue
+      }
+
+      const update = { home_goals: fm.HomeTeamScore, away_goals: fm.AwayTeamScore, locked: true }
       if (fm.ResultType === 2 && fm.HomeTeamPenaltyScore != null) {
-        const penWinner = fm.HomeTeamPenaltyScore > fm.AwayTeamPenaltyScore
+        update.penalty_winner = fm.HomeTeamPenaltyScore > fm.AwayTeamPenaltyScore
           ? fm.Home?.ShortClubName : fm.Away?.ShortClubName
-        update.penalty_winner = penWinner
       }
       await supabase.from('matches').update(update).eq('id', match.id)
       updated++
     }
 
-    setMsg(updated > 0 ? `Synced ${updated} result(s) from FIFA API ✅` : 'No new results to sync yet.')
-    reloadMatches()
+    if (updated > 0) {
+      setMsg(`✅ Synced ${updated} new result(s) · ${skipped} already up to date`)
+    } else {
+      setMsg(`✅ All ${skipped} result(s) already up to date — nothing to sync`)
+    }
+    reloadMatches() // reload so inputs show latest scores from DB
   }
 
   const recalcPoints = async () => {
