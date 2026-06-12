@@ -27,12 +27,65 @@ function TeamFlag({ name }) {
   const [err, setErr] = useState(false)
   if (!iso || err) return null
   return (
-    <img
-      src={`https://flagcdn.com/w40/${iso}.png`}
-      onError={() => setErr(true)}
-      alt={name}
-      className="w-7 h-5 object-cover rounded-sm flex-shrink-0"
-    />
+    <img src={`https://flagcdn.com/w40/${iso}.png`} onError={() => setErr(true)}
+      alt={name} className="w-7 h-5 object-cover rounded-sm flex-shrink-0" />
+  )
+}
+
+function LockCountdown({ match }) {
+  const [diff, setDiff] = useState(null)
+
+  useEffect(() => {
+    if (!match.match_date || match.home_goals != null) return
+    const kickoff = new Date(`${match.match_date}T${match.match_time || '00:00'}:00Z`)
+    const lockAt = kickoff.getTime() - 60 * 60 * 1000 // 1hr before
+
+    const update = () => setDiff(lockAt - Date.now())
+    update()
+    const t = setInterval(update, 1000)
+    return () => clearInterval(t)
+  }, [match.match_date, match.match_time, match.home_goals])
+
+  // Don't show for finished matches or if no date
+  if (!diff || match.home_goals != null) return null
+  // Already locked
+  if (diff <= 0) return null
+
+  const totalSecs  = Math.floor(diff / 1000)
+  const days  = Math.floor(totalSecs / 86400)
+  const hours = Math.floor((totalSecs % 86400) / 3600)
+  const mins  = Math.floor((totalSecs % 3600) / 60)
+  const secs  = totalSecs % 60
+
+  let label, colorClass, icon
+  if (diff > 24 * 3600 * 1000) {
+    // > 24h — grey, calm
+    label = days > 0 ? `${days}d ${hours}h` : `${hours}h ${mins}m`
+    colorClass = 'text-slate-500'
+    icon = '⏰'
+  } else if (diff > 6 * 3600 * 1000) {
+    // 6–24h — yellow, notice
+    label = `${hours}h ${mins}m`
+    colorClass = 'text-yellow-400'
+    icon = '⏰'
+  } else if (diff > 3600 * 1000) {
+    // 1–6h — orange, warning
+    label = `${hours}h ${mins}m`
+    colorClass = 'text-orange-400'
+    icon = '⚡'
+  } else {
+    // < 1h — red, urgent
+    label = `${mins}m ${secs}s`
+    colorClass = 'text-red-400 animate-pulse font-bold'
+    icon = '🚨'
+  }
+
+  return (
+    <div className={`flex items-center gap-1 text-[11px] ${colorClass} mt-1`}>
+      <span>{icon}</span>
+      <span>Locks in {label}</span>
+      {diff < 6 * 3600 * 1000 && <span className="ml-1 opacity-70">— predict now!</span>}
+    </div>
   )
 }
 
@@ -164,6 +217,9 @@ function MatchCard({ match, prediction, onSave, locked }) {
           </button>
         </div>
       )}
+
+      {/* Lock countdown — shown below the action row for open matches */}
+      {!isLocked && !hasResult && <LockCountdown match={match} />}
     </div>
   )
 }
