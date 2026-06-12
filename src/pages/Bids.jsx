@@ -172,14 +172,15 @@ export default function Bids() {
   const loadData = async () => {
     if (!player) { setLoading(false); return }
 
-    // Fetch FIFA API for match schedule + DB for authoritative final scores + bids
-    const [fifaData, { data: bidData }, { data: dbMatches }] = await Promise.all([
-      fetchWithFallback(FIFA_MATCHES),
-      supabase.from('bids').select('*').eq('player_id', player.id),
-      supabase.from('matches').select('match_num,home_goals,away_goals,home_team,away_team').not('home_goals', 'is', null),
-    ])
+    try {
+      // Fetch FIFA API for match schedule + DB for authoritative final scores + bids
+      const [fifaData, { data: bidData }, { data: dbMatches }] = await Promise.all([
+        fetchWithFallback(FIFA_MATCHES),
+        supabase.from('bids').select('*').eq('player_id', player.id),
+        supabase.from('matches').select('match_num,home_goals,away_goals,home_team,away_team').not('home_goals', 'is', null),
+      ])
 
-    if (!fifaData) { setError(true); setLoading(false); return }
+      if (!fifaData) { setError(true); setLoading(false); return }
 
     // Build a map of authoritative DB results (admin-confirmed scores)
     const dbResultMap = Object.fromEntries((dbMatches || []).map(m => [m.match_num, m]))
@@ -235,6 +236,11 @@ export default function Bids() {
     }
     setBalance(bal)
     setLoading(false)
+    } catch(err) {
+      console.error('Bids load error:', err)
+      setError(true)
+      setLoading(false)
+    }
   }
 
   useEffect(() => { loadData() }, [player])
