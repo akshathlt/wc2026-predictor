@@ -11,7 +11,7 @@ function Countdown() {
     return () => clearInterval(t)
   }, [])
 
-  // Tournament underway — group/special predictions locked, but match predictions still open per-match
+  // All predictions locked
   if (diff <= 0) return (
     <div className="space-y-2 text-center">
       <div className="inline-flex items-center gap-2 bg-green-900/40 border border-green-700 rounded-xl px-5 py-2.5">
@@ -27,14 +27,24 @@ function Countdown() {
   const m = Math.floor((diff % 3600000) / 60000)
   const s = Math.floor((diff % 60000) / 1000)
 
+  // Urgent — less than 6 hours left
+  const urgent = diff < 6 * 3600000
+
   return (
-    <div className="flex gap-4 justify-center text-center">
-      {[['Days', d], ['Hours', h], ['Mins', m], ['Secs', s]].map(([label, val]) => (
-        <div key={label} className="bg-slate-800 rounded-xl px-4 py-3 min-w-[70px]">
-          <div className="text-3xl font-black text-green-400 tabular-nums">{String(val).padStart(2,'0')}</div>
-          <div className="text-xs text-slate-400 mt-1">{label}</div>
-        </div>
-      ))}
+    <div className="space-y-3">
+      <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold
+        ${urgent ? 'bg-red-900/40 border-red-700 text-red-300 animate-pulse' : 'bg-orange-900/30 border-orange-700 text-orange-300'}`}>
+        ⏰ {urgent ? '🚨 Last chance!' : '⚠️ Closing soon —'} Group predictions lock in:
+      </div>
+      <div className="flex gap-3 justify-center text-center">
+        {(d > 0 ? [['Days', d], ['Hours', h], ['Mins', m], ['Secs', s]] : [['Hours', h], ['Mins', m], ['Secs', s]]).map(([label, val]) => (
+          <div key={label} className={`rounded-xl px-4 py-3 min-w-[70px] ${urgent ? 'bg-red-900/50' : 'bg-slate-800'}`}>
+            <div className={`text-3xl font-black tabular-nums ${urgent ? 'text-red-400' : 'text-yellow-400'}`}>{String(val).padStart(2,'0')}</div>
+            <div className="text-xs text-slate-400 mt-1">{label}</div>
+          </div>
+        ))}
+      </div>
+      <p className="text-slate-500 text-xs">After this, only individual match predictions remain open (until each kick-off)</p>
     </div>
   )
 }
@@ -64,9 +74,9 @@ export default function Home() {
         </p>
 
         <div className="space-y-3">
-          <p className="text-slate-500 text-sm uppercase tracking-widest font-semibold">Tournament Status</p>
+          <p className="text-slate-500 text-sm uppercase tracking-widest font-semibold">⚽ Tournament is Live!</p>
           <Countdown />
-          <p className="text-slate-500 text-xs">Group picks extended to June 14 midnight UTC · Match predictions open per kick-off</p>
+          <p className="text-slate-500 text-xs">June 11 – July 19, 2026 · 48 teams · 104 matches</p>
         </div>
 
         {session ? (
