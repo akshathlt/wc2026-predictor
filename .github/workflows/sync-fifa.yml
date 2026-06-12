@@ -51,7 +51,7 @@ jobs:
               if (!dbMatch) continue;
               if (dbMatch.home_goals === fm.HomeTeamScore && dbMatch.away_goals === fm.AwayTeamScore) { skipped++; continue; }
 
-              const update = { home_goals: fm.HomeTeamScore, away_goals: fm.AwayTeamScore, locked: true };
+              const update = { home_goals: fm.HomeTeamScore, away_goals: fm.AwayTeamScore, locked: true, last_synced_at: new Date().toISOString() };
               if (fm.ResultType === 2 && fm.HomeTeamPenaltyScore != null) {
                 update.penalty_winner = fm.HomeTeamPenaltyScore > fm.AwayTeamPenaltyScore
                   ? fm.Home?.ShortClubName : fm.Away?.ShortClubName;

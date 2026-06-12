@@ -87,6 +87,16 @@ function BidForm({ match, playerId, existingBid, balance, onBidPlaced }) {
             ? <span className="px-3 py-1 bg-green-900/40 border border-green-700 rounded-lg text-green-300 font-black text-sm">
                 {match.homeScore} – {match.awayScore}
               </span>
+            : match.isLive && match.homeScore != null
+            ? <div className="flex flex-col items-center">
+                <span className="px-3 py-1 bg-red-900/40 border border-red-700 rounded-lg text-red-300 font-black text-sm">
+                  {match.homeScore} – {match.awayScore}
+                </span>
+                <span className="text-[9px] text-red-400 font-bold mt-0.5">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse mr-0.5 align-middle" />
+                  {match.matchTime || 'LIVE'} — result pending
+                </span>
+              </div>
             : <span className="text-slate-500 font-bold">vs</span>}
         </div>
         <div className="flex items-center gap-2 flex-1">
@@ -180,7 +190,11 @@ export default function Bids() {
       .filter(m => m.StageName?.[0]?.Description === 'First Stage')
       .sort((a, b) => a.MatchNumber - b.MatchNumber)
       .map(m => {
-        const dbResult = dbResultMap[m.MatchNumber]
+        // Override scores with DB scores for settlement accuracy
+        // ONLY mark as settled when:
+        // 1. Admin has synced to DB (dbResult exists) AND
+        // 2. FIFA API confirms match is finished (MatchStatus === 0, not live/in-progress)
+        const fifaFinished = m.MatchStatus === 0 && m.HomeTeamScore != null
         return {
           matchNum:  m.MatchNumber,
           groupName: m.GroupName?.[0]?.Description || '',
@@ -188,10 +202,11 @@ export default function Bids() {
           away:      m.Away?.ShortClubName || 'TBD',
           homeCode:  m.Home?.IdCountry,
           awayCode:  m.Away?.IdCountry,
-          // Use DB score (admin-confirmed) for settlement; fall back to API only for display
-          homeScore: dbResult ? dbResult.home_goals : (m.MatchStatus === 0 ? m.HomeTeamScore : null),
-          awayScore: dbResult ? dbResult.away_goals : (m.MatchStatus === 0 ? m.AwayTeamScore : null),
-          settled:   !!dbResult, // only show result when admin has confirmed it
+          homeScore: dbResult ? dbResult.home_goals : (fifaFinished ? m.HomeTeamScore : null),
+          awayScore: dbResult ? dbResult.away_goals : (fifaFinished ? m.AwayTeamScore : null),
+          settled:   !!dbResult && fifaFinished, // BOTH admin DB + FIFA confirmed
+          isLive:    m.MatchStatus === 3 || m.MatchStatus === 12,
+          matchTime: m.MatchTime,
           date:      m.Date,
         }
       })
