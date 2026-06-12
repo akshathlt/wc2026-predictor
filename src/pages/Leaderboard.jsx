@@ -377,51 +377,136 @@ export default function Leaderboard() {
   const sendDailyEmail = () => {
     const top5 = players.slice(0, 5)
     const today = new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
-    const medals = ['🥇','🥈','🥉','4️⃣','5️⃣']
     const totalPlayers = players.length
+    const medals = ['🥇','🥈','🥉','4️⃣','5️⃣']
+    const gap = top5.length > 1 ? (top5[0]?.total_pts||0) - (top5[1]?.total_pts||0) : 0
+    const dayNum = Math.floor((Date.now() - new Date('2026-06-11T19:00:00Z').getTime()) / 86400000) + 1
+
+    // Pick theme based on match day
+    const themes = [
+      { bg:'#0a4f1a', accent:'#22c55e', header:'⚽ Day ' + dayNum + ' — The Race Heats Up!' },
+      { bg:'#1a0a2e', accent:'#a855f7', header:'🌙 Evening Update — Day ' + dayNum },
+      { bg:'#1a0f00', accent:'#f59e0b', header:'🔥 Matchday ' + dayNum + ' Standings' },
+      { bg:'#0a1a3e', accent:'#3b82f6', header:'⚡ Day ' + dayNum + ' Leaderboard' },
+    ]
+    const theme = themes[dayNum % themes.length]
 
     const rankRows = top5.map((p, i) =>
-      `${medals[i]}  #${i+1}  ${p.display_name.padEnd(20,' ')}  ${p.total_pts} pts  (Matches: ${p.stage_pts||0} | Special: ${p.special_pts||0})`
-    ).join('\n')
+      `<tr>
+        <td style="padding:12px 16px;font-size:22px;width:40px;">${medals[i]}</td>
+        <td style="padding:12px 8px;font-size:15px;font-weight:700;color:#fff;">${p.display_name}</td>
+        <td style="padding:12px 16px;text-align:right;font-size:20px;font-weight:900;color:${theme.accent};">${p.total_pts} pts</td>
+      </tr>`
+    ).join('<tr><td colspan="3" style="border-bottom:1px solid rgba(255,255,255,0.08);padding:0;"></td></tr>')
 
-    const gapRow = top5.length > 1
-      ? `\n📊 Gap between 1st and 2nd: ${(top5[0]?.total_pts||0) - (top5[1]?.total_pts||0)} pts`
-      : ''
+    const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0d0d0d;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0d0d0d;padding:20px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
 
-    const subject = encodeURIComponent(`⚽ WC2026 Predictor – Daily Standings Update | ${today}`)
-    const body = encodeURIComponent(
-`Hi Team,
+        <!-- Header with gradient -->
+        <tr>
+          <td style="background:linear-gradient(135deg,${theme.bg} 0%,#0d0d0d 100%);padding:40px 32px 32px;text-align:center;border-bottom:3px solid ${theme.accent};">
+            <div style="font-size:56px;margin-bottom:12px;">⚽</div>
+            <h1 style="margin:0;font-size:28px;font-weight:900;color:#fff;letter-spacing:-0.5px;">${theme.header}</h1>
+            <p style="margin:8px 0 0;color:rgba(255,255,255,0.6);font-size:14px;">${today}</p>
+          </td>
+        </tr>
 
-Here is your daily WC2026 Predictor standings update for ${today}!
+        <!-- Leaderboard -->
+        <tr>
+          <td style="background:#111;padding:0;">
+            <div style="padding:24px 32px 8px;">
+              <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,0.4);text-transform:uppercase;">🏆 Top 5 Leaderboard</p>
+            </div>
+            <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+              ${rankRows}
+            </table>
+            <div style="padding:16px 32px;display:flex;gap:24px;">
+              <span style="font-size:13px;color:rgba(255,255,255,0.5);">📊 Gap 1st→2nd: <b style="color:#fff;">${gap} pts</b></span>
+              <span style="font-size:13px;color:rgba(255,255,255,0.5);">👥 Players: <b style="color:#fff;">${totalPlayers}</b></span>
+            </div>
+          </td>
+        </tr>
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🏆 TOP 5 LEADERBOARD
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        <!-- CTA Button -->
+        <tr>
+          <td style="background:#111;padding:8px 32px 32px;text-align:center;">
+            <a href="https://akshathlt.github.io/wc2026-predictor/leaderboard"
+               style="display:inline-block;background:${theme.accent};color:#000;font-weight:900;font-size:15px;padding:14px 36px;border-radius:50px;text-decoration:none;letter-spacing:0.5px;">
+              🏆 View Full Leaderboard →
+            </a>
+          </td>
+        </tr>
 
-${rankRows}
-${gapRow}
+        <!-- Points reminder -->
+        <tr>
+          <td style="background:#0d0d0d;padding:24px 32px;border-top:1px solid #222;">
+            <p style="margin:0 0 12px;font-size:13px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;">🎯 Points System</p>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              ${[['Correct winner/draw','2 pts'],['Correct goal diff','3 pts'],['Exact scoreline','5 pts'],['🃏 Joker card','×2 all pts']].map(([l,p])=>
+                `<tr>
+                  <td style="padding:4px 0;font-size:13px;color:rgba(255,255,255,0.7);">${l}</td>
+                  <td style="padding:4px 0;font-size:13px;font-weight:700;color:${theme.accent};text-align:right;">${p}</td>
+                </tr>`
+              ).join('')}
+            </table>
+          </td>
+        </tr>
 
-📌 Total participants: ${totalPlayers}
-🔗 Full leaderboard: https://akshathlt.github.io/wc2026-predictor/leaderboard
+        <!-- Upcoming reminder -->
+        <tr>
+          <td style="background:#0d0d0d;padding:0 32px 24px;text-align:center;">
+            <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:16px;">
+              <p style="margin:0;font-size:14px;color:rgba(255,255,255,0.8);">
+                ⏰ Each match locks <b style="color:${theme.accent};">1 hour before kick-off</b><br>
+                Upcoming matches are still open — predict now!
+              </p>
+              <a href="https://akshathlt.github.io/wc2026-predictor/matches"
+                 style="display:inline-block;margin-top:12px;background:rgba(255,255,255,0.1);color:#fff;font-weight:700;font-size:13px;padding:10px 24px;border-radius:50px;text-decoration:none;">
+                ⚽ Predict Matches
+              </a>
+            </div>
+          </td>
+        </tr>
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        <!-- Footer -->
+        <tr>
+          <td style="background:#080808;padding:20px 32px;text-align:center;border-top:1px solid #1a1a1a;">
+            <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.3);">
+              FIFA World Cup 2026 Predictor &nbsp;·&nbsp;
+              <a href="https://akshathlt.github.io/wc2026-predictor/" style="color:${theme.accent};text-decoration:none;">Open App</a>
+            </p>
+          </td>
+        </tr>
 
-🎯 Reminder: Submit your match predictions before each kick-off to keep earning points!
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
 
-Points system:
-  • Correct winner/draw  → 2 pts
-  • Correct goal diff    → 3 pts
-  • Exact scoreline      → 5 pts
-  • 🃏 Joker card         → ×2 multiplier
+    // Open as data URI in new tab so user can copy-paste to Outlook
+    const blob = new Blob([html], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank')
 
-Keep predicting and climb the leaderboard! 🚀
+    // Also open mailto as fallback
+    const subject = encodeURIComponent(`⚽ WC2026 Predictor – Daily Standings | ${today}`)
+    const textBody = encodeURIComponent(
+`${theme.header} — ${today}
 
-Best regards,
-CPIT O2C-Engineering – Events Team | SAP
-🔗 https://akshathlt.github.io/wc2026-predictor/
-`)
+${top5.map((p,i)=>`${medals[i]} #${i+1} ${p.display_name} — ${p.total_pts} pts`).join('\n')}
 
-    window.location.href = `mailto:?subject=${subject}&body=${body}`
+Gap: ${gap} pts · Total players: ${totalPlayers}
+Full leaderboard: https://akshathlt.github.io/wc2026-predictor/leaderboard
+
+⚽ Predict upcoming matches: https://akshathlt.github.io/wc2026-predictor/matches`)
+
+    setTimeout(() => { window.location.href = `mailto:?subject=${subject}&body=${textBody}` }, 500)
   }
 
   return (
