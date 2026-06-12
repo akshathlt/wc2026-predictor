@@ -6,8 +6,9 @@ import { fetchWithFallback } from '../lib/fetchWithFallback'
 const KNOCKOUT_STAGES = ['r32', 'qf', 'sf', '3rd', 'final']
 const FIFA_MATCHES_URL = 'https://api.fifa.com/api/v3/calendar/matches?language=en&count=200&idSeason=285023'
 
-// MatchStatus: 4=FT, 5=FT, 6=FT AET, 7=FT Pen
-const FINISHED_STATUSES = [4, 5, 6, 7]
+// FIFA MatchStatus: 0=Finished(with score), 1=Upcoming, 3=Live, 12=HT, 4/5/6/7=also finished variants
+// Key: use HomeTeamScore != null as the definitive "has result" check
+const FINISHED_STATUSES = [0, 4, 5, 6, 7]
 
 // 3-dot / lines tab bar
 function TabBar({ tabs, active, onChange }) {
@@ -200,8 +201,11 @@ export default function Admin() {
     const data = await fetchWithFallback(FIFA_MATCHES_URL)
     if (!data) { setMsg('FIFA API unavailable — try again later.'); return }
 
-    const fifaMatches = (data.Results || []).filter(m => FINISHED_STATUSES.includes(m.MatchStatus))
-    if (fifaMatches.length === 0) { setMsg('No completed matches found in FIFA API yet.'); return }
+    // Use score presence as primary check — FIFA uses status=0 for finished matches
+    const fifaMatches = (data.Results || []).filter(m =>
+      m.HomeTeamScore != null && m.AwayTeamScore != null
+    )
+    if (fifaMatches.length === 0) { setMsg('No completed matches with scores found in FIFA API yet.'); return }
 
     let updated = 0
     for (const fm of fifaMatches) {
