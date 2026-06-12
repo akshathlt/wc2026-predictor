@@ -28,9 +28,24 @@ jobs:
           };
 
           async function query(path, opts = {}) {
-            const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: { ...headers, ...opts.headers }, ...opts });
+            const { headers: extraHeaders, ...restOpts } = opts
+            const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+              headers: { ...headers, 'Prefer': 'return=minimal', ...(extraHeaders || {}) },
+              ...restOpts
+            })
             if (!r.ok) { const t = await r.text(); throw new Error(`${r.status} ${path}: ${t}`); }
-            return opts.method && opts.method !== 'GET' ? null : r.json();
+            return restOpts.method && restOpts.method !== 'GET' ? null : r.json();
+          }
+
+          async function logSync(updated, skipped, message) {
+            try {
+              await fetch(`${SUPABASE_URL}/rest/v1/sync_log`, {
+                method: 'POST',
+                headers: { ...headers, 'Prefer': 'return=minimal' },
+                body: JSON.stringify({ source: 'github_action', matches_updated: updated, matches_skipped: skipped, message })
+              })
+              console.log('✅ Sync log written')
+            } catch(e) { console.warn('Log write failed (non-fatal):', e.message) }
           }
 
           async function main() {
@@ -64,17 +79,7 @@ jobs:
 
             if (updated === 0) {
               console.log('No new results — skipping recalculation');
-              // Still log the run so you can see it ran
-              await query('sync_log', {
-                method: 'POST',
-                headers: { 'Prefer': 'return=minimal' },
-                body: JSON.stringify({
-                  source: 'github_action',
-                  matches_updated: 0,
-                  matches_skipped: skipped,
-                  message: `No new results. ${skipped} already up to date.`
-                })
-              });
+              await logSync(0, skipped, `No new results. ${skipped} already up to date.`);
               return;
             }
 
@@ -114,19 +119,7 @@ jobs:
               });
             }
             console.log(`✅ Recalculated points for ${Object.keys(totals).length} players`);
-
-            // 6. Write to sync_log table
-            await query('sync_log', {
-              method: 'POST',
-              headers: { 'Prefer': 'return=minimal' },
-              body: JSON.stringify({
-                source: 'github_action',
-                matches_updated: updated,
-                matches_skipped: skipped,
-                message: `Synced ${updated} results, recalculated ${Object.keys(totals).length} players`
-              })
-            });
-            console.log('✅ Sync log written');
+            await logSync(updated, skipped, `Synced ${updated} results, recalculated ${Object.keys(totals).length} players`);
           }
 
           main().catch(e => {
