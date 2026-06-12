@@ -41,7 +41,8 @@ function BidForm({ match, playerId, existingBid, balance, onBidPlaced }) {
   // Lock 1hr before UTC kick-off
   const lockTime = new Date(new Date(match.date).getTime() - 60 * 60 * 1000)
   const isLocked = Date.now() > lockTime
-  const hasResult = match.homeScore != null && match.awayScore != null
+  // Only show result when admin has confirmed score in DB (not during live match)
+  const hasResult = match.settled && match.homeScore != null && match.awayScore != null
 
   const maxBet = Math.min(balance + (existingBid?.amount || 0), STARTING_BALANCE)
 
@@ -161,29 +162,39 @@ export default function Bids() {
   const loadData = async () => {
     if (!player) return
 
-    // Fetch matches from FIFA API (same source as Fixtures page)
-    const [fifaData, { data: bidData }] = await Promise.all([
+    // Fetch FIFA API for match schedule + DB for authoritative final scores + bids
+    const [fifaData, { data: bidData }, { data: dbMatches }] = await Promise.all([
       fetchWithFallback(FIFA_MATCHES),
       supabase.from('bids').select('*').eq('player_id', player.id),
+      supabase.from('matches').select('match_num,home_goals,away_goals,home_team,away_team').not('home_goals', 'is', null),
     ])
 
     if (!fifaData) { setError(true); setLoading(false); return }
 
-    // Parse only group stage matches, sorted by match number
+    // Build a map of authoritative DB results (admin-confirmed scores)
+    const dbResultMap = Object.fromEntries((dbMatches || []).map(m => [m.match_num, m]))
+
+    // Parse group stage matches from FIFA API for schedule/teams
+    // But override scores with DB scores for settlement accuracy
     const groupMatches = (fifaData.Results || [])
       .filter(m => m.StageName?.[0]?.Description === 'First Stage')
       .sort((a, b) => a.MatchNumber - b.MatchNumber)
-      .map(m => ({
-        matchNum:  m.MatchNumber,
-        groupName: m.GroupName?.[0]?.Description || '',
-        home:      m.Home?.ShortClubName || 'TBD',
-        away:      m.Away?.ShortClubName || 'TBD',
-        homeCode:  m.Home?.IdCountry,
-        awayCode:  m.Away?.IdCountry,
-        homeScore: m.HomeTeamScore,
-        awayScore: m.AwayTeamScore,
-        date:      m.Date,
-      }))
+      .map(m => {
+        const dbResult = dbResultMap[m.MatchNumber]
+        return {
+          matchNum:  m.MatchNumber,
+          groupName: m.GroupName?.[0]?.Description || '',
+          home:      m.Home?.ShortClubName || 'TBD',
+          away:      m.Away?.ShortClubName || 'TBD',
+          homeCode:  m.Home?.IdCountry,
+          awayCode:  m.Away?.IdCountry,
+          // Use DB score (admin-confirmed) for settlement; fall back to API only for display
+          homeScore: dbResult ? dbResult.home_goals : (m.MatchStatus === 0 ? m.HomeTeamScore : null),
+          awayScore: dbResult ? dbResult.away_goals : (m.MatchStatus === 0 ? m.AwayTeamScore : null),
+          settled:   !!dbResult, // only show result when admin has confirmed it
+          date:      m.Date,
+        }
+      })
 
     setMatches(groupMatches)
 
@@ -197,13 +208,14 @@ export default function Bids() {
       const match = groupMatches.find(m => m.matchNum === bid.match_num)
       if (!match) continue
       const hasResult = match.homeScore != null && match.awayScore != null
-      if (!hasResult) {
+      const isSettled = match.settled && match.homeScore != null && match.awayScore != null
+      if (!isSettled) {
         bal -= bid.amount // open bet, money reserved
       } else {
         const actual = match.homeScore > match.awayScore ? match.home
           : match.awayScore > match.homeScore ? match.away : 'Draw'
         if (bid.pick === actual) bal += bid.amount // win: stake returned + profit
-        // loss: already removed from starting balance (we subtract all bets at start)
+        // loss: already removed from starting balance
       }
     }
     setBalance(bal)
