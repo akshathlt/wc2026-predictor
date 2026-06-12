@@ -170,7 +170,7 @@ export default function Bids() {
   const [error,    setError]    = useState(false)
 
   const loadData = async () => {
-    if (!player) return
+    if (!player) { setLoading(false); return }
 
     // Fetch FIFA API for match schedule + DB for authoritative final scores + bids
     const [fifaData, { data: bidData }, { data: dbMatches }] = await Promise.all([
@@ -238,6 +238,12 @@ export default function Bids() {
   }
 
   useEffect(() => { loadData() }, [player])
+
+  // Safety: never spin forever — timeout after 15s
+  useEffect(() => {
+    const t = setTimeout(() => { if (loading) { setLoading(false); setError(true) } }, 15000)
+    return () => clearTimeout(t)
+  }, [])
 
   if (loading) return (
     <div className="max-w-4xl mx-auto px-4 py-16 text-center">
