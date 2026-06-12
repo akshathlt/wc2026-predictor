@@ -246,15 +246,17 @@ export default function Admin() {
     }
 
     if (updated > 0) {
-      setMsg(`✅ Synced ${updated} new result(s) · ${skipped} already up to date`)
+      setMsg(`✅ Synced ${updated} new result(s) · ${skipped} already up to date · recalculating points…`)
+      reloadMatches()
+      await recalcPoints(true) // auto-recalc after sync
     } else {
       setMsg(`✅ All ${skipped} result(s) already up to date — nothing to sync`)
+      reloadMatches()
     }
-    reloadMatches() // reload so inputs show latest scores from DB
   }
 
-  const recalcPoints = async () => {
-    setMsg('Recalculating points…')
+  const recalcPoints = async (silent = false) => {
+    if (!silent) setMsg('Recalculating points…')
     const { data: finishedMatches } = await supabase.from('matches').select('*').not('home_goals', 'is', null)
     for (const match of finishedMatches || []) {
       const { data: preds } = await supabase.from('match_predictions').select('*').eq('match_id', match.id)
@@ -282,7 +284,8 @@ export default function Admin() {
     for (const [pid, pts] of Object.entries(totals)) {
       await supabase.from('players').update({ stage_pts: pts, total_pts: pts }).eq('id', pid)
     }
-    setMsg('Points recalculated ✅')
+    if (!silent) setMsg('Points recalculated ✅')
+    else setMsg(prev => prev.replace('recalculating points…', 'points recalculated ✅'))
     reloadPlayers()
   }
 
@@ -331,8 +334,8 @@ export default function Admin() {
           <div className="flex flex-wrap gap-2 items-center justify-between">
             <p className="text-slate-400 text-sm">Enter real scores after each match, or sync automatically from FIFA.</p>
             <div className="flex gap-2">
-              <button onClick={syncFromFIFA} className="btn-secondary !py-2 !px-4 text-sm">📡 Sync from FIFA API</button>
-              <button onClick={recalcPoints} className="btn-primary !py-2 !px-4 text-sm">🔄 Recalculate Points</button>
+              <button onClick={syncFromFIFA} className="btn-secondary !py-2 !px-4 text-sm">📡 Sync from FIFA API + Recalculate</button>
+              <button onClick={() => recalcPoints()} className="btn-primary !py-2 !px-4 text-sm">🔄 Recalculate Points Only</button>
             </div>
           </div>
           <div className="divide-y divide-slate-800 rounded-xl border border-slate-700 px-4">
