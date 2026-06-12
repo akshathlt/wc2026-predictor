@@ -22,24 +22,42 @@ function MatchItem({ m }) {
   const scoreA = m.AwayTeamScore
   const hasScore = scoreH != null && scoreA != null
   const isLive = m.MatchStatus === 3 || m.MatchStatus === 12
-  const isFinished = [4,5,6,7].includes(m.MatchStatus)
-  const status = STATUS_LABEL[m.MatchStatus] || ''
-  const time = m.Date ? new Date(m.Date).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) : ''
+  const isHT   = m.MatchStatus === 12
+  const isFinished = [0,4,5,6,7].includes(m.MatchStatus) && hasScore
+  const matchTime = m.MatchTime // e.g. "64'" or "45+2'"
+  const kickoffTime = m.Date ? new Date(m.Date).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) : ''
   const group = m.GroupName?.[0]?.Description || m.StageName?.[0]?.Description || ''
 
   return (
-    <div className={`px-3 py-2 border-b border-slate-800/60 ${isLive ? 'bg-red-950/20' : ''}`}>
+    <div className={`px-3 py-2 border-b border-slate-800/60 ${isLive ? 'bg-red-950/30' : ''}`}>
       <div className="flex items-center gap-1.5">
+        {/* Home */}
         <div className="flex items-center gap-1 flex-1 min-w-0 justify-end">
           <span className={`text-xs truncate ${isFinished && scoreH > scoreA ? 'text-white font-bold' : 'text-slate-300'}`}>{home}</span>
           <FlagImg code={m.Home?.IdCountry} name={home} />
         </div>
-        <div className="flex flex-col items-center w-14 flex-shrink-0">
-          {hasScore
-            ? <span className={`text-xs font-black ${isLive ? 'text-red-400' : 'text-white'}`}>{scoreH}–{scoreA}</span>
-            : <span className="text-[10px] font-bold text-slate-400">{time}</span>}
-          <span className={`text-[8px] ${isLive ? 'text-red-400 animate-pulse' : 'text-slate-600'}`}>{status}</span>
+
+        {/* Centre: score/time + live badge */}
+        <div className="flex flex-col items-center w-16 flex-shrink-0">
+          {hasScore ? (
+            <span className={`text-xs font-black ${isLive ? 'text-red-300' : 'text-white'}`}>{scoreH}–{scoreA}</span>
+          ) : (
+            <span className="text-[10px] font-bold text-slate-400">{kickoffTime}</span>
+          )}
+          {isLive && matchTime && (
+            <span className="text-[9px] font-bold text-red-400 animate-pulse">
+              🔴 {isHT ? 'HT' : matchTime}
+            </span>
+          )}
+          {isLive && !matchTime && (
+            <span className="text-[8px] text-red-400 animate-pulse">🔴 LIVE</span>
+          )}
+          {isFinished && !isLive && (
+            <span className="text-[8px] text-slate-500">FT</span>
+          )}
         </div>
+
+        {/* Away */}
         <div className="flex items-center gap-1 flex-1 min-w-0">
           <FlagImg code={m.Away?.IdCountry} name={away} />
           <span className={`text-xs truncate ${isFinished && scoreA > scoreH ? 'text-white font-bold' : 'text-slate-300'}`}>{away}</span>

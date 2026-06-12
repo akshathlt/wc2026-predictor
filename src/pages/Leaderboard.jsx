@@ -574,18 +574,31 @@ export default function Leaderboard() {
 </body>
 </html>`
 
-    // Copy HTML to clipboard so admin can paste directly into Outlook (Ctrl+V)
+    // Best approach for Outlook: write HTML to a hidden div, select it, copy
+    // This copies as rich HTML so Outlook receives formatted content, not raw HTML tags
+    const div = document.createElement('div')
+    div.contentEditable = 'true'
+    div.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;pointer-events:none;'
+    div.innerHTML = html
+    document.body.appendChild(div)
+
     try {
-      await navigator.clipboard.write([
-        new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([html], { type: 'text/plain' }) })
-      ])
-      alert('✅ Email HTML copied to clipboard!\n\nNow:\n1. Open Outlook → New Email\n2. Paste (Ctrl+V) into the email body\n3. Add recipients and send!')
+      const range = document.createRange()
+      range.selectNodeContents(div)
+      const sel = window.getSelection()
+      sel.removeAllRanges()
+      sel.addRange(range)
+      document.execCommand('copy')
+      sel.removeAllRanges()
+      document.body.removeChild(div)
+      alert('✅ Email copied!\n\n1. Open Outlook → New Email\n2. Click in the email body\n3. Paste with Ctrl+V\n\nThe formatted email will appear exactly as designed.')
     } catch {
-      // Fallback: open in new tab for manual copy
+      document.body.removeChild(div)
+      // Fallback: open in tab
       const blob = new Blob([html], { type: 'text/html' })
       const url = URL.createObjectURL(blob)
       window.open(url, '_blank')
-      alert('📋 Email opened in new tab.\n\nSelect All (Ctrl+A) → Copy (Ctrl+C) → Paste into Outlook')
+      alert('📋 Email opened in new tab.\nSelect All (Ctrl+A) → Copy (Ctrl+C) → Paste into Outlook')
     }
   }
 

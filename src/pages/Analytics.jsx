@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { fetchWithFallback } from '../lib/fetchWithFallback'
 
-const KU_LEUVEN_URL = 'https://dtai.cs.kuleuven.be/sports/worldcup2026/data/predictions.json'
+// Use a CORS proxy since KU Leuven doesn't set Access-Control-Allow-Origin
+const KU_LEUVEN_URL = 'https://corsproxy.io/?url=https://dtai.cs.kuleuven.be/sports/worldcup2026/data/predictions.json'
+const KU_LEUVEN_DIRECT = 'https://dtai.cs.kuleuven.be/sports/worldcup2026/data/predictions.json'
 const FLAG_URL = (iso) => `https://flagcdn.com/w40/${iso}.png`
 
 // Team abbreviation → ISO flag code + full name
@@ -55,7 +57,13 @@ export default function Analytics() {
   const [teamB,    setTeamB]    = useState('ARG')
 
   useEffect(() => {
-    fetchWithFallback(KU_LEUVEN_URL).then(data => {
+    // Try CORS proxy first, fall back to direct (works in some browsers)
+    const tryFetch = async () => {
+      let data = await fetchWithFallback(KU_LEUVEN_URL)
+      if (!data) data = await fetchWithFallback(KU_LEUVEN_DIRECT)
+      return data
+    }
+    tryFetch().then(data => {
       if (!data) { setError(true); setLoading(false); return }
 
       // Compute tournament strength: avg win rate vs all opponents
