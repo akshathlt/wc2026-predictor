@@ -74,8 +74,86 @@ function AccuracyBar({ label, pct, color, icon }) {
   )
 }
 
+function PredictionBreakdown({ playerId }) {
+  const [data, setData]       = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from('match_predictions').select('*').eq('player_id', playerId),
+      supabase.from('matches').select('*').not('home_goals', 'is', null).order('match_num'),
+    ]).then(([{ data: preds }, { data: matches }]) => {
+      if (!preds || !matches) { setLoading(false); return }
+      const rows = matches.map(m => {
+        const pred = preds.find(p => p.match_id === m.id)
+        if (!pred) return null
+        const realDiff = m.home_goals - m.away_goals
+        const predDiff = pred.predicted_home - pred.predicted_away
+        let base = 0
+        let breakdown = []
+        if (Math.sign(predDiff) === Math.sign(realDiff)) { base += 2; breakdown.push('✓ Correct winner (+2)') }
+        if (predDiff === realDiff && !(pred.predicted_home === m.home_goals && pred.predicted_away === m.away_goals)) {
+          base += 1; breakdown.push('✓ Correct goal diff (+1)')
+        }
+        if (pred.predicted_home === m.home_goals && pred.predicted_away === m.away_goals) {
+          base += 3; breakdown.push('🎯 Exact score (+3)')
+        }
+        const jokerBonus = pred.joker_used ? base : 0
+        if (pred.joker_used) breakdown.push(`🃏 Joker ×2 (+${base})`)
+        const total = base + jokerBonus
+        return { match: m, pred, base, total, breakdown, joker: pred.joker_used }
+      }).filter(Boolean)
+
+      const totalPts = rows.reduce((s, r) => s + r.total, 0)
+      setData({ rows, totalPts })
+      setLoading(false)
+    })
+  }, [playerId])
+
+  if (loading) return <div className="px-4 py-4 text-center text-slate-500 text-sm">Loading predictions…</div>
+  if (!data || data.rows.length === 0) return <div className="px-4 py-4 text-center text-slate-500 text-sm">No predictions for finished matches yet.</div>
+
+  return (
+    <div className="border-t border-slate-800 bg-slate-900/60">
+      <div className="px-4 py-3 flex items-center justify-between">
+        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Match Prediction Breakdown</span>
+        <span className="text-xs text-yellow-400 font-bold">{data.totalPts} pts total</span>
+      </div>
+      <div className="px-3 pb-3 space-y-2">
+        {data.rows.map(({ match: m, pred, total, breakdown, joker }) => (
+          <div key={m.id} className={`rounded-lg p-2.5 text-xs ${total > 0 ? 'bg-green-900/20 border border-green-800/40' : 'bg-slate-800/40 border border-slate-700/40'}`}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <span className="text-slate-400 shrink-0">M{m.match_num}</span>
+                <span className="font-medium truncate">{m.home_team} {m.home_goals}–{m.away_goals} {m.away_team}</span>
+                {joker && <span className="text-yellow-400 shrink-0">🃏</span>}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-slate-400">Pred: <b className="text-slate-200">{pred.predicted_home}–{pred.predicted_away}</b></span>
+                <span className={`font-black text-sm ${total > 0 ? 'text-yellow-400' : 'text-slate-600'}`}>+{total}</span>
+              </div>
+            </div>
+            {breakdown.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {breakdown.map((b, i) => (
+                  <span key={i} className="bg-green-900/50 text-green-300 px-1.5 py-0.5 rounded text-[10px] font-medium">{b}</span>
+                ))}
+              </div>
+            )}
+            {breakdown.length === 0 && (
+              <div className="mt-1 text-slate-600 text-[10px]">✗ Wrong prediction — 0 pts</div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function PlayerRow({ p, rank, isMe }) {
-  const [flash, setFlash] = useState(false)
+  const [flash,    setFlash]    = useState(false)
+  const [expanded, setExpanded] = useState(false)
+
   useEffect(() => {
     setFlash(true)
     const t = setTimeout(() => setFlash(false), 600)
@@ -83,40 +161,47 @@ function PlayerRow({ p, rank, isMe }) {
   }, [p.total_pts])
 
   const topThree = rank <= 3
-  // Parse avatar_seed: stored as "style" (e.g. "adventurer")
   const avatarStyle = p.avatar_seed || 'adventurer'
   const seed = p.display_name || 'player'
 
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all
-      ${isMe ? 'border-green-500 bg-green-900/20' : topThree ? 'border-yellow-700/50 bg-yellow-900/10' : 'border-slate-700/50 hover:border-slate-600'}
+    <div className={`rounded-xl border overflow-hidden transition-all
+      ${isMe ? 'border-green-500' : topThree ? 'border-yellow-700/50' : 'border-slate-700/50'}
       ${flash ? 'animate-pop' : ''}`}>
-      <span className="w-8 text-lg font-black text-center flex-shrink-0">
-        {rank <= 3 ? MEDALS[rank-1] : <span className="text-slate-400 text-sm">{rank}</span>}
-      </span>
-      {/* Avatar */}
-      <Avatar style={avatarStyle} name={seed} size="md" />
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold truncate">
-          {p.display_name}
-          {isMe && <span className="text-green-400 text-xs ml-1">(you)</span>}
-        </p>
-        <div className="flex gap-4 text-xs text-slate-500 mt-0.5">
-          <span>Matches: <b className="text-slate-300">{p.stage_pts || 0}</b></span>
-          <span>Special: <b className="text-slate-300">{p.special_pts || 0}</b></span>
+      {/* Row — clickable */}
+      <div
+        onClick={() => setExpanded(e => !e)}
+        className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors
+          ${isMe ? 'bg-green-900/20 hover:bg-green-900/30' : topThree ? 'bg-yellow-900/10 hover:bg-yellow-900/20' : 'hover:bg-slate-800/40'}`}>
+        <span className="w-8 text-lg font-black text-center flex-shrink-0">
+          {rank <= 3 ? MEDALS[rank-1] : <span className="text-slate-400 text-sm">{rank}</span>}
+        </span>
+        <Avatar style={avatarStyle} name={seed} size="md" />
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold truncate">
+            {p.display_name}
+            {isMe && <span className="text-green-400 text-xs ml-1">(you)</span>}
+          </p>
+          <div className="flex gap-4 text-xs text-slate-500 mt-0.5">
+            <span>Matches: <b className="text-slate-300">{p.stage_pts || 0}</b></span>
+            <span>Special: <b className="text-slate-300">{p.special_pts || 0}</b></span>
+          </div>
         </div>
-      </div>
-      {/* Mini bar */}
-      <div className="w-20 hidden sm:block">
-        <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-          <div className="h-full bg-yellow-500 rounded-full transition-all"
-            style={{width: `${Math.min(100, (p.total_pts || 0) / 2)}%`}} />
+        <div className="w-20 hidden sm:block">
+          <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div className="h-full bg-yellow-500 rounded-full transition-all"
+              style={{width: `${Math.min(100, (p.total_pts || 0) / 2)}%`}} />
+          </div>
         </div>
+        <div className="text-right">
+          <p className="text-xl font-black text-yellow-400">{p.total_pts || 0}</p>
+          <p className="text-xs text-slate-500">pts</p>
+        </div>
+        <span className={`text-slate-500 text-xs ml-1 transition-transform ${expanded ? 'rotate-180' : ''}`}>▼</span>
       </div>
-      <div className="text-right">
-        <p className="text-xl font-black text-yellow-400">{p.total_pts || 0}</p>
-        <p className="text-xs text-slate-500">pts</p>
-      </div>
+
+      {/* Breakdown drawer */}
+      {expanded && <PredictionBreakdown playerId={p.id} />}
     </div>
   )
 }
