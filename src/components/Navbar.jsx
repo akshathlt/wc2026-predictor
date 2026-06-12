@@ -92,6 +92,7 @@ export default function Navbar() {
   const tournamentLinks = [
     { to: '/fixtures',  label: '📅 Fixtures'  },
     { to: '/standings', label: '📊 Standings' },
+    { to: '/analytics', label: '🤖 Analytics' },
   ]
   const allFlatLinks = [
     { to: '/',            label: '🏠 Home'            },

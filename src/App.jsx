@@ -13,6 +13,7 @@ import Fixtures from './pages/Fixtures'
 import Standings from './pages/Standings'
 import WhatsNew from './pages/WhatsNew'
 import Bids from './pages/Bids'
+import Analytics from './pages/Analytics'
 import OnboardModal from './components/OnboardModal'
 import ForceChangePasswordModal from './components/ForceChangePasswordModal'
 import ChangePassword from './pages/ChangePassword'
@@ -56,6 +57,7 @@ function Inner() {
             <Route path="/fixtures"   element={<Fixtures />} />
             <Route path="/standings"  element={<Standings />} />
             <Route path="/whats-new"  element={<WhatsNew />} />
+            <Route path="/analytics"  element={<Analytics />} />
             <Route path="/bids"       element={session ? <Bids /> : <Navigate to="/auth" />} />
             <Route path="/admin"      element={session && player?.is_admin ? <Admin /> : <Navigate to="/" />} />
             <Route path="/change-password" element={<ChangePassword />} />
