@@ -173,9 +173,9 @@ export default function Bids() {
     if (!player) { setLoading(false); return }
 
     try {
-      // Fetch FIFA API for match schedule + DB for authoritative final scores + bids
+      // Fetch FIFA API with longer timeout (200 matches can be slow) + DB for scores + bids
       const [fifaData, { data: bidData }, { data: dbMatches }] = await Promise.all([
-        fetchWithFallback(FIFA_MATCHES),
+        fetchWithFallback(FIFA_MATCHES, 15000), // 15s timeout for large payload
         supabase.from('bids').select('*').eq('player_id', player.id),
         supabase.from('matches').select('match_num,home_goals,away_goals,home_team,away_team').not('home_goals', 'is', null),
       ])
