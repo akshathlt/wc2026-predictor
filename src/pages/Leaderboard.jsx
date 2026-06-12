@@ -459,7 +459,7 @@ export default function Leaderboard() {
   // "World" average — placeholder until real data; ESPN match data used when available
   const worldAvgAcc = 38  // baseline placeholder until enough results accumulate
 
-  const sendDailyEmail = () => {
+  const sendDailyEmail = async () => {
     const top5 = players.slice(0, 5)
     const today = new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
     const totalPlayers = players.length
