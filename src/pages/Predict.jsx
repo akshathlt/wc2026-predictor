@@ -305,8 +305,8 @@ export default function Predict() {
       </div>
 
       {locked && (
-        <div className="mb-6 bg-red-900/30 border border-red-700 rounded-xl p-4 text-red-300 text-sm font-semibold text-center">
-          🔒 Predictions are now locked. You can view but not edit.
+        <div className="mb-6 bg-orange-900/30 border border-orange-700 rounded-xl p-4 text-orange-300 text-sm font-semibold text-center">
+          🔒 Group stage predictions locked — tournament is underway.
         </div>
       )}
 

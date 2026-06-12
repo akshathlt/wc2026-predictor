@@ -104,4 +104,6 @@ export const TOP10_TEAMS = ['Brazil','France','Argentina','Spain','England','Por
 
 export const ALL_TEAMS = Object.values(WC_GROUPS).flat().map(t => t.name)
 
-export const LOCK_DATE = new Date('2026-06-11T19:00:00Z')
+// Original lock: 2026-06-11T19:00:00Z
+// Extended grace period for late joiners — groups/special unlocked until Jun 14 midnight UTC
+export const LOCK_DATE = new Date('2026-06-14T00:00:00Z')

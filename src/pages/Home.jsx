@@ -66,7 +66,7 @@ export default function Home() {
         <div className="space-y-3">
           <p className="text-slate-500 text-sm uppercase tracking-widest font-semibold">Tournament Status</p>
           <Countdown />
-          <p className="text-slate-500 text-xs">June 11, 2026 · 3:00 PM ET (first kick-off) · Ends July 19</p>
+          <p className="text-slate-500 text-xs">Group picks extended to June 14 midnight UTC · Match predictions open per kick-off</p>
         </div>
 
         {session ? (
