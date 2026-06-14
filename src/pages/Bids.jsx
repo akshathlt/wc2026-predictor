@@ -173,44 +173,29 @@ export default function Bids() {
     if (!player) { setLoading(false); return }
 
     try {
-      // Fetch FIFA API with longer timeout (200 matches can be slow) + DB for scores + bids
-      const [fifaData, { data: bidData }, { data: dbMatches }] = await Promise.all([
-        fetchWithFallback(FIFA_MATCHES, 15000), // 15s timeout for large payload
+      // Read all data from Supabase — no direct FIFA API call (CORS blocked in browser)
+      const [{ data: bidData }, { data: dbMatches }] = await Promise.all([
         supabase.from('bids').select('*').eq('player_id', player.id),
-        supabase.from('matches').select('match_num,home_goals,away_goals,home_team,away_team').not('home_goals', 'is', null),
+        supabase.from('matches').select('*').eq('stage', 'group').order('match_num'),
       ])
 
-      if (!fifaData) { setError(true); setLoading(false); return }
+      if (!dbMatches || dbMatches.length === 0) { setError(true); setLoading(false); return }
 
-    // Build a map of authoritative DB results (admin-confirmed scores)
-    const dbResultMap = Object.fromEntries((dbMatches || []).map(m => [m.match_num, m]))
-
-    // Parse group stage matches from FIFA API for schedule/teams
-    // But override scores with DB scores for settlement accuracy
-    const groupMatches = (fifaData.Results || [])
-      .filter(m => m.StageName?.[0]?.Description === 'First Stage')
-      .sort((a, b) => a.MatchNumber - b.MatchNumber)
-      .map(m => {
-        // Override scores with DB scores for settlement accuracy
-        // ONLY mark as settled when:
-        // 1. Admin has synced to DB (dbResult exists) AND
-        // 2. FIFA API confirms match is finished (MatchStatus === 0, not live/in-progress)
-        const fifaFinished = m.MatchStatus === 0 && m.HomeTeamScore != null
-        return {
-          matchNum:  m.MatchNumber,
-          groupName: m.GroupName?.[0]?.Description || '',
-          home:      m.Home?.ShortClubName || 'TBD',
-          away:      m.Away?.ShortClubName || 'TBD',
-          homeCode:  m.Home?.IdCountry,
-          awayCode:  m.Away?.IdCountry,
-          homeScore: dbResult ? dbResult.home_goals : (fifaFinished ? m.HomeTeamScore : null),
-          awayScore: dbResult ? dbResult.away_goals : (fifaFinished ? m.AwayTeamScore : null),
-          settled:   !!dbResult && fifaFinished, // BOTH admin DB + FIFA confirmed
-          isLive:    m.MatchStatus === 3 || m.MatchStatus === 12,
-          matchTime: m.MatchTime,
-          date:      m.Date,
-        }
-      })
+      // Build match list from DB
+      const groupMatches = dbMatches.map(m => ({
+        matchNum:  m.match_num,
+        groupName: m.group_name ? `Group ${m.group_name}` : '',
+        home:      m.home_team,
+        away:      m.away_team,
+        homeCode:  null,
+        awayCode:  null,
+        homeScore: m.home_goals,
+        awayScore: m.away_goals,
+        settled:   m.locked && m.home_goals != null,
+        isLive:    false,
+        matchTime: m.match_time,
+        date:      m.match_date ? `${m.match_date}T${m.match_time || '00:00'}:00Z` : null,
+      }))
 
     setMatches(groupMatches)
 
