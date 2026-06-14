@@ -89,7 +89,7 @@ function LockCountdown({ match }) {
   )
 }
 
-function MatchCard({ match, prediction, onSave, locked }) {
+function MatchCard({ match, prediction, onSave, locked, jokersLeft = 3 }) {
   const [home,          setHome]          = useState(prediction?.predicted_home ?? '')
   const [away,          setAway]          = useState(prediction?.predicted_away ?? '')
   const [joker,         setJoker]         = useState(prediction?.joker_used ?? false)
@@ -161,7 +161,7 @@ function MatchCard({ match, prediction, onSave, locked }) {
       {/* Knockout draw — penalty winner picker */}
       {knockout && !hasResult && !isLocked && isDraw && home !== '' && away !== '' && (
         <div className="mb-3 p-2 bg-purple-900/20 border border-purple-700/40 rounded-lg">
-          <p className="text-xs text-purple-300 font-semibold mb-1.5">🥅 It's a draw — who wins on penalties? (+5 pts)</p>
+          <p className="text-xs text-purple-300 font-semibold mb-1.5">🥅 It's a draw — who wins on penalties? <span className="text-yellow-300">(+10 pts if correct!)</span></p>
           <div className="flex gap-2">
             <button onClick={() => setPenWinner(match.home_team)}
               className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all
@@ -205,10 +205,11 @@ function MatchCard({ match, prediction, onSave, locked }) {
       {!isLocked && !hasResult && (
         <div className="flex items-center gap-3">
           <button onClick={() => setJoker(j => !j)}
-            title="Double your points for this match"
+            disabled={!joker && jokersLeft <= 0}
+            title={!joker && jokersLeft <= 0 ? 'No jokers left!' : 'Double your points for this match'}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all
-              ${joker ? 'border-yellow-500 bg-yellow-900/30 text-yellow-300' : 'border-slate-700 hover:border-slate-500 text-slate-400'}`}>
-            🃏 {joker ? 'JOKER ON' : 'Use Joker'}
+              ${joker ? 'border-yellow-500 bg-yellow-900/30 text-yellow-300' : jokersLeft <= 0 ? 'border-slate-800 text-slate-600 cursor-not-allowed' : 'border-slate-700 hover:border-slate-500 text-slate-400'}`}>
+            🃏 {joker ? 'JOKER ON' : jokersLeft <= 0 ? 'No jokers' : 'Use Joker'}
           </button>
           <button onClick={save} disabled={saving || home === '' || away === ''}
             className={`ml-auto px-4 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-40
@@ -228,17 +229,16 @@ export default function MatchPredict() {
   const { player } = useAuth()
   const [matches, setMatches] = useState([])
   const [preds, setPreds]     = useState({})
-  const [jokersLeft, setJokersLeft] = useState(3)
-  // Per-match lock: locks 1 hour before each match's own kick-off
-  // Global lock only used as final fallback
-  const GLOBAL_LOCK = new Date('2026-07-19T23:00:00Z') // after the Final
+  const [jokersLeft,   setJokersLeft]   = useState(3)
+  const [koJokersLeft, setKoJokersLeft] = useState(3)
+
+  const GLOBAL_LOCK = new Date('2026-07-19T23:00:00Z')
 
   const isMatchLocked = (match) => {
     if (match.locked) return true
     if (!match.match_date) return false
-    // Build UTC kick-off from match_date + match_time
     const kickoff = new Date(`${match.match_date}T${match.match_time || '00:00'}:00Z`)
-    return Date.now() > kickoff.getTime() - 60 * 60 * 1000 // lock 1hr before
+    return Date.now() > kickoff.getTime() - 60 * 60 * 1000
   }
 
   const locked = Date.now() > GLOBAL_LOCK
@@ -248,18 +248,22 @@ export default function MatchPredict() {
     Promise.all([
       supabase.from('matches').select('*').order('match_num'),
       supabase.from('match_predictions').select('*').eq('player_id', player.id),
-      supabase.from('players').select('jokers_left').eq('id', player.id).single(),
+      supabase.from('players').select('jokers_left, knockout_jokers_left').eq('id', player.id).single(),
     ]).then(([{ data: m }, { data: p }, { data: pl }]) => {
       if (m) setMatches(m)
       if (p) setPreds(Object.fromEntries(p.map(r => [r.match_id, r])))
-      if (pl) setJokersLeft(pl.jokers_left ?? 3)
+      if (pl) {
+        setJokersLeft(pl.jokers_left ?? 3)
+        setKoJokersLeft(pl.knockout_jokers_left ?? 3)
+      }
     })
   }, [player])
 
-  const saveMatch = async (matchId, home, away, jokerUsed, penWinner) => {
+  const saveMatch = async (matchId, home, away, jokerUsed, penWinner, isKO) => {
     const prev = preds[matchId]
     const wasJoker = prev?.joker_used ?? false
-    if (jokerUsed && !wasJoker && jokersLeft <= 0) return
+    const availableJokers = isKO ? koJokersLeft : jokersLeft
+    if (jokerUsed && !wasJoker && availableJokers <= 0) return
 
     const row = {
       player_id: player.id, match_id: matchId,
@@ -272,9 +276,15 @@ export default function MatchPredict() {
 
     if (jokerUsed !== wasJoker) {
       const delta = jokerUsed ? -1 : 1
-      const newCount = Math.max(0, jokersLeft + delta)
-      await supabase.from('players').update({ jokers_left: newCount }).eq('id', player.id)
-      setJokersLeft(newCount)
+      if (isKO) {
+        const newCount = Math.max(0, koJokersLeft + delta)
+        await supabase.from('players').update({ knockout_jokers_left: newCount }).eq('id', player.id)
+        setKoJokersLeft(newCount)
+      } else {
+        const newCount = Math.max(0, jokersLeft + delta)
+        await supabase.from('players').update({ jokers_left: newCount }).eq('id', player.id)
+        setJokersLeft(newCount)
+      }
     }
   }
 
@@ -287,22 +297,43 @@ export default function MatchPredict() {
 
   const stageOrder = ['A','B','C','D','E','F','G','H','I','J','K','L','r32','qf','sf','3rd','final']
   const sortedGroups = Object.entries(grouped).sort(([a],[b]) => stageOrder.indexOf(a) - stageOrder.indexOf(b))
-
   const stageLabel = { r32:'Round of 16', qf:'Quarter-Finals', sf:'Semi-Finals', '3rd':'3rd Place Play-off', final:'🏆 World Cup Final' }
+
+  const hasKnockoutMatches = sortedGroups.some(([g]) => isKnockout(g))
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-3xl font-black mb-1">⚽ Match Predictions</h1>
           <p className="text-slate-400 text-sm">Exact = 5 pts · Right diff = 3 pts · Right winner = 2 pts</p>
-          <p className="text-slate-500 text-xs mt-0.5">🟣 Knockout draw = +5 pts · Correct penalties = +5 pts</p>
+          <p className="text-slate-500 text-xs mt-0.5">🟣 Knockout draw = +5 pts · Correct penalties = +10 pts</p>
         </div>
-        <div className="text-center card px-4 py-3">
-          <div className="text-2xl font-black text-yellow-400">{jokersLeft}/3</div>
-          <div className="text-xs text-slate-400">Jokers left 🃏</div>
+        {/* Joker counters */}
+        <div className="flex gap-2">
+          <div className="text-center card px-3 py-2">
+            <div className="text-xl font-black text-yellow-400">{jokersLeft}/3</div>
+            <div className="text-[10px] text-slate-400">Group 🃏</div>
+          </div>
+          <div className="text-center card px-3 py-2 border-purple-700/50">
+            <div className="text-xl font-black text-purple-300">{koJokersLeft}/3</div>
+            <div className="text-[10px] text-slate-400">Knockout 🃏</div>
+          </div>
         </div>
       </div>
+
+      {/* Knockout stage explainer banner — shown once knockouts appear */}
+      {hasKnockoutMatches && (
+        <div className="mb-5 bg-purple-900/20 border border-purple-700/50 rounded-xl p-4">
+          <p className="text-purple-200 font-bold text-sm mb-1">🏆 Knockout Stage Rules</p>
+          <ul className="text-purple-300 text-xs space-y-1">
+            <li>🟣 You have <strong className="text-white">3 fresh Joker cards</strong> for all knockout matches combined</li>
+            <li>⚖️ If you predict a <strong className="text-white">draw</strong> and the match goes to extra time — <strong className="text-yellow-300">+5 bonus pts</strong></li>
+            <li>🥅 Predict the correct <strong className="text-white">penalty shootout winner</strong> — <strong className="text-yellow-300">+10 bonus pts</strong></li>
+            <li>🃏 Use your Joker to <strong className="text-white">double ALL points</strong> for that match (including bonuses!)</li>
+          </ul>
+        </div>
+      )}
 
       {locked && (
         <div className="mb-6 bg-red-900/30 border border-red-700 rounded-xl p-4 text-red-300 text-sm font-semibold text-center">
@@ -325,13 +356,16 @@ export default function MatchPredict() {
       ) : (
         sortedGroups.map(([group, ms]) => (
           <div key={group} className="mb-8">
-            <h2 className={`text-lg font-bold mb-3 ${isKnockout(group) ? 'text-purple-300' : 'text-slate-300'}`}>
+            <h2 className={`text-lg font-bold mb-3 flex items-center gap-2 ${isKnockout(group) ? 'text-purple-300' : 'text-slate-300'}`}>
               {stageLabel[group] || `Group ${group}`}
+              {isKnockout(group) && <span className="text-xs bg-purple-700/40 text-purple-300 px-2 py-0.5 rounded-full font-normal">Draw+Pen bonuses active</span>}
             </h2>
             <div className="grid sm:grid-cols-2 gap-3">
               {ms.map(m => (
                 <MatchCard key={m.id} match={m} prediction={preds[m.id]}
-                  onSave={saveMatch} locked={isMatchLocked(m)} />
+                  onSave={(matchId, home, away, joker, pen) => saveMatch(matchId, home, away, joker, pen, isKnockout(m.stage))}
+                  locked={isMatchLocked(m)}
+                  jokersLeft={isKnockout(m.stage) ? koJokersLeft : jokersLeft} />
               ))}
             </div>
           </div>

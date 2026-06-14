@@ -68,7 +68,11 @@ export default function Navbar() {
       if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false)
     }
     document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    document.addEventListener('touchstart', handler) // iOS support
+    return () => {
+      document.removeEventListener('mousedown', handler)
+      document.removeEventListener('touchstart', handler)
+    }
   }, [])
 
   useEffect(() => { setMenuOpen(false) }, [location.pathname])
@@ -219,16 +223,27 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile full menu */}
+      {/* Mobile full menu — scrollable, works on Android + iOS */}
       {menuOpen && (
-        <div className="md:hidden border-t border-slate-800 bg-slate-950 px-2 py-2 space-y-0.5">
+        <div className="md:hidden border-t border-slate-800 bg-slate-950 px-2 py-2 space-y-0.5 max-h-[80vh] overflow-y-auto">
           {allFlatLinks.map(l => (
             <Link key={l.to} to={l.to}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeMobile(l.to)}`}>
+              onTouchEnd={() => setMenuOpen(false)}
+              onClick={() => setMenuOpen(false)}
+              className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-all ${activeMobile(l.to)}`}>
               {l.label}
               {l.to === '/whats-new' && hasNew && <span className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />}
             </Link>
           ))}
+          {/* Sign out in mobile menu */}
+          {session && (
+            <button
+              onTouchEnd={() => { signOut(); setMenuOpen(false) }}
+              onClick={() => { signOut(); setMenuOpen(false) }}
+              className="w-full flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium text-red-400 hover:bg-red-900/20 border-l-2 border-transparent">
+              🚪 Sign out
+            </button>
+          )}
         </div>
       )}
     </nav>
