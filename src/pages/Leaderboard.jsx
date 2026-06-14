@@ -421,7 +421,43 @@ export default function Leaderboard() {
   const [players, setPlayers]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [lastUpdate, setLastUpdate] = useState(null)
-  const [oddsData, setOddsData] = useState(null) // reserved for future use
+  const [oddsData, setOddsData] = useState(null)
+  const [tab, setTab] = useState('predictions') // 'predictions' | 'bids'
+  const [bidBoard, setBidBoard] = useState([]) // reserved for future use
+
+  const fetchBidLeaderboard = async () => {
+    // Get all bids with player info
+    const { data: bids } = await supabase
+      .from('bids')
+      .select('player_id, amount, pick, match_num, settled, won')
+    const { data: allPlayers } = await supabase
+      .from('players')
+      .select('id, display_name, avatar_style')
+
+    if (!bids || !allPlayers) return
+
+    const STARTING = 2500
+    const totals = {}
+    for (const b of bids) {
+      if (!totals[b.player_id]) totals[b.player_id] = { balance: STARTING, won: 0, lost: 0, open: 0 }
+      if (!b.settled) {
+        totals[b.player_id].balance -= b.amount
+        totals[b.player_id].open++
+      } else if (b.won) {
+        totals[b.player_id].balance += b.amount
+        totals[b.player_id].won++
+      } else {
+        totals[b.player_id].lost++
+      }
+    }
+
+    const board = allPlayers
+      .filter(p => totals[p.id])
+      .map(p => ({ ...p, ...totals[p.id] }))
+      .sort((a, b) => b.balance - a.balance)
+
+    setBidBoard(board)
+  }
 
   const fetchPlayers = async () => {
     const { data } = await supabase
@@ -434,6 +470,7 @@ export default function Leaderboard() {
 
   useEffect(() => {
     fetchPlayers()
+    fetchBidLeaderboard()
     const channel = supabase
       .channel('leaderboard')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, fetchPlayers)
@@ -629,7 +666,68 @@ export default function Leaderboard() {
         )}
       </div>
 
-      {/* ── My Standing Card (rank gauge + accuracy) ── */}
+      {/* ── Tab switcher ── */}
+      <div className="flex rounded-xl overflow-hidden border border-slate-700 mb-6">
+        <button onClick={() => setTab('predictions')}
+          className={`flex-1 py-2 text-sm font-semibold transition-colors
+            ${tab === 'predictions' ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+          🏆 Predictions
+        </button>
+        <button onClick={() => setTab('bids')}
+          className={`flex-1 py-2 text-sm font-semibold transition-colors
+            ${tab === 'bids' ? 'bg-yellow-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+          💰 Fun Bidding
+        </button>
+      </div>
+
+      {/* ── Bid leaderboard tab ── */}
+      {tab === 'bids' && (
+        <div className="space-y-2">
+          <p className="text-slate-500 text-xs text-center mb-4">Virtual money only · Starts at €2,500 · Win = stake ×2</p>
+          {bidBoard.length === 0 ? (
+            <div className="card p-12 text-center">
+              <p className="text-4xl mb-3">💰</p>
+              <p className="text-slate-400">No bids placed yet — be the first!</p>
+            </div>
+          ) : (
+            bidBoard.map((p, i) => {
+              const isMe = p.id === player?.id
+              const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : null
+              const gain = p.balance - 2500
+              return (
+                <div key={p.id} className={`flex items-center gap-4 px-4 py-3 rounded-xl border transition-all
+                  ${isMe ? 'border-yellow-500 bg-yellow-900/10' : 'border-slate-700/50 hover:border-slate-600'}`}>
+                  <span className="w-8 text-lg font-black text-center">
+                    {medal || <span className="text-slate-400 text-sm">{i + 1}</span>}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold truncate">
+                      {p.display_name}
+                      {isMe && <span className="text-yellow-400 text-xs ml-1">(you)</span>}
+                    </p>
+                    <div className="flex gap-3 text-xs text-slate-500 mt-0.5">
+                      <span>✅ Won: <b className="text-green-400">{p.won}</b></span>
+                      <span>❌ Lost: <b className="text-red-400">{p.lost}</b></span>
+                      <span>⏳ Open: <b className="text-slate-300">{p.open}</b></span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-xl font-black ${p.balance >= 2500 ? 'text-green-400' : 'text-red-400'}`}>
+                      €{p.balance.toLocaleString()}
+                    </p>
+                    <p className={`text-xs ${gain >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {gain >= 0 ? '+' : ''}{gain.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      )}
+
+      {/* ── Predictions tab ── */}
+      {tab === 'predictions' && (<>
       {myRank > 0 && (
         <div className="card p-5 mb-6 border border-green-800/40">
           <p className="text-xs font-bold text-green-400 uppercase tracking-widest mb-4">📊 Your Standing</p>
@@ -706,6 +804,7 @@ export default function Leaderboard() {
           name={myData?.display_name || ''}
         />
       )}
+      </>)}
     </div>
   )
 }
