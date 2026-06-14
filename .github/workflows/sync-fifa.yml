@@ -49,20 +49,68 @@ jobs:
           }
 
           async function main() {
-            // 1. Fetch FIFA scores
+            // 1. Fetch ALL FIFA matches (group + knockout TBD)
             console.log('Fetching FIFA API...');
             const fifa = await fetch(FIFA_URL).then(r => r.json());
-            const fifaWithScores = (fifa.Results || []).filter(m => m.HomeTeamScore != null && m.AwayTeamScore != null);
-            console.log(`FIFA matches with scores: ${fifaWithScores.length}`);
+            const allMatches = fifa.Results || [];
+            const fifaWithScores = allMatches.filter(m => m.HomeTeamScore != null && m.AwayTeamScore != null);
+            console.log(`Total FIFA matches: ${allMatches.length}, with scores: ${fifaWithScores.length}`);
 
             // 2. Get DB matches
-            const dbMatches = await query('matches?select=id,match_num,home_goals,away_goals,home_team,away_team');
+            const dbMatches = await query('matches?select=id,match_num,home_goals,away_goals,home_team,away_team,stage');
             console.log(`DB matches: ${dbMatches.length}`);
 
-            // 3. Sync new/changed results
-            let updated = 0, skipped = 0;
-            for (const fm of fifaWithScores) {
+            // 3. Upsert ALL matches including TBD knockouts so UI can show them
+            const STAGE_MAP = {
+              'First Stage': 'group',
+              'Round of 32': 'r32',
+              'Round of 16': 'r32',
+              'Quarter-final': 'qf',
+              'Semi-final': 'sf',
+              'Play-off for third place': '3rd',
+              'Final': 'final'
+            }
+            let inserted = 0;
+            for (const fm of allMatches) {
               const dbMatch = dbMatches.find(m => m.match_num === fm.MatchNumber);
+              const stageName = fm.StageName?.[0]?.Description || ''
+              const stage = STAGE_MAP[stageName] || (stageName.includes('Final') ? 'final' : stageName.includes('Semi') ? 'sf' : stageName.includes('Quarter') ? 'qf' : stageName.includes('16') || stageName.includes('32') ? 'r32' : 'group')
+              const homeTeam = fm.Home?.ShortClubName || fm.PlaceHolderA || 'TBD'
+              const awayTeam = fm.Away?.ShortClubName || fm.PlaceHolderB || 'TBD'
+              const matchDate = fm.Date ? fm.Date.split('T')[0] : null
+              const matchTime = fm.Date ? fm.Date.split('T')[1]?.substring(0,5) : null
+              const groupName = fm.GroupName?.[0]?.Description?.replace('Group ','') || null
+
+              if (!dbMatch && stage !== 'group') {
+                // Insert knockout matches not in DB yet
+                const newMatch = {
+                  match_num: fm.MatchNumber,
+                  stage,
+                  group_name: groupName,
+                  home_team: homeTeam,
+                  away_team: awayTeam,
+                  match_date: matchDate,
+                  match_time: matchTime,
+                  locked: false
+                }
+                await query('matches', { method: 'POST', headers: { 'Prefer': 'return=minimal' }, body: JSON.stringify(newMatch) })
+                inserted++
+              } else if (dbMatch) {
+                // Update team names if they changed from TBD to real
+                const needsUpdate = (dbMatch.home_team === 'TBD' && homeTeam !== 'TBD') ||
+                                    (dbMatch.away_team === 'TBD' && awayTeam !== 'TBD')
+                if (needsUpdate) {
+                  await query(`matches?id=eq.${dbMatch.id}`, { method: 'PATCH', body: JSON.stringify({ home_team: homeTeam, away_team: awayTeam }) })
+                }
+              }
+            }
+            if (inserted > 0) console.log(`✅ Inserted ${inserted} new knockout fixtures`)
+
+            // 4. Sync scores for completed matches
+            let updated = 0, skipped = 0;
+            const dbMatchesRefresh = await query('matches?select=id,match_num,home_goals,away_goals');
+            for (const fm of fifaWithScores) {
+              const dbMatch = dbMatchesRefresh.find(m => m.match_num === fm.MatchNumber);
               if (!dbMatch) continue;
               if (dbMatch.home_goals === fm.HomeTeamScore && dbMatch.away_goals === fm.AwayTeamScore) { skipped++; continue; }
 
