@@ -102,7 +102,7 @@ jobs:
                 const KNOCKOUT = ['r32','qf','sf','3rd','final'];
                 if (KNOCKOUT.includes(match.stage) && match.home_goals === match.away_goals) {
                   if (predDiff === 0) penPts += 5;
-                  if (match.penalty_winner && pred.penalty_winner === match.penalty_winner) penPts += 5;
+                  if (match.penalty_winner && pred.penalty_winner === match.penalty_winner) penPts += 10;
                 }
                 if (pred.joker_used) { pts *= 2; penPts *= 2; }
                 await query(`match_predictions?id=eq.${pred.id}`, {
@@ -138,3 +138,4 @@ jobs:
             process.exit(1);
           });
           EOF
+

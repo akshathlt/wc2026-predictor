@@ -281,7 +281,7 @@ export default function Admin() {
         if (pred.predicted_home === match.home_goals && pred.predicted_away === match.away_goals) pts += 2
         let penPts = 0
         if (knockout && realDraw && predDiff === 0) penPts += 5
-        if (knockout && realDraw && match.penalty_winner && pred.penalty_winner === match.penalty_winner) penPts += 5
+        if (knockout && realDraw && match.penalty_winner && pred.penalty_winner === match.penalty_winner) penPts += 10
         if (pred.joker_used) { pts *= 2; penPts *= 2 }
         await supabase.from('match_predictions').update({ total_pts: pts, penalty_pts: penPts }).eq('id', pred.id)
       }
