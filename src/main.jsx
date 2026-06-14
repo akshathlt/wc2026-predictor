@@ -4,7 +4,10 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import './index.css'
 
-const basename = import.meta.env.VITE_BASE_PATH || '/wc2026-predictor'
+// Use root path on Cloudflare Pages (pages.dev), subdirectory on GitHub Pages
+const isCloudflare = window.location.hostname.endsWith('.pages.dev') ||
+                     !window.location.hostname.includes('github.io')
+const basename = isCloudflare ? '/' : '/wc2026-predictor'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
