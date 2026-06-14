@@ -1,0 +1,168 @@
+name: Daily Teams Leaderboard Notification
+
+on:
+  schedule:
+    # Send at 22:00 UTC daily (after most match days finish)
+    - cron: '0 22 * * *'
+  workflow_dispatch: # Allow manual trigger anytime
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch leaderboard and send to Teams
+        env:
+          SUPABASE_URL: https://neqdmjxbjwxmoiaxzkiy.supabase.co
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          TEAMS_WEBHOOK: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          APP_URL: https://wc2026-predictor-dmz.pages.dev
+        run: |
+          node << 'EOF'
+          const SUPABASE_URL  = process.env.SUPABASE_URL
+          const ANON_KEY      = process.env.SUPABASE_ANON_KEY
+          const TEAMS_WEBHOOK = process.env.TEAMS_WEBHOOK
+          const APP_URL       = process.env.APP_URL
+
+          const headers = {
+            'apikey': ANON_KEY,
+            'Authorization': `Bearer ${ANON_KEY}`,
+            'Content-Type': 'application/json'
+          }
+
+          async function main() {
+            // 1. Fetch top players
+            const r = await fetch(`${SUPABASE_URL}/rest/v1/players?select=display_name,total_pts,stage_pts,special_pts&order=total_pts.desc&limit=10`, { headers })
+            const players = await r.json()
+            if (!Array.isArray(players) || players.length === 0) {
+              console.log('No players found — skipping notification')
+              return
+            }
+
+            // 2. Calculate day number
+            const start = new Date('2026-06-11T19:00:00Z')
+            const dayNum = Math.max(1, Math.floor((Date.now() - start.getTime()) / 86400000) + 1)
+            const dateStr = new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
+
+            const medals = ['🥇','🥈','🥉','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟']
+            const top5 = players.slice(0, 5)
+            const gap = top5.length > 1 ? (top5[0].total_pts || 0) - (top5[1].total_pts || 0) : 0
+
+            // 3. Build Adaptive Card matching the screenshot style
+            const card = {
+              type: 'message',
+              attachments: [{
+                contentType: 'application/vnd.microsoft.card.adaptive',
+                content: {
+                  '$schema': 'http://adaptivecards.io/schemas/adaptive-card.json',
+                  type: 'AdaptiveCard',
+                  version: '1.4',
+                  body: [
+                    // Header
+                    {
+                      type: 'ColumnSet',
+                      columns: [
+                        { type: 'Column', width: 'auto', items: [{ type: 'TextBlock', text: '⚽', size: 'Large' }] },
+                        { type: 'Column', width: 'stretch', items: [
+                          { type: 'TextBlock', text: `⚡ Day ${dayNum} Leaderboard`, weight: 'Bolder', size: 'Large', color: 'Warning' },
+                          { type: 'TextBlock', text: dateStr, size: 'Small', color: 'Default', spacing: 'None' }
+                        ]}
+                      ]
+                    },
+                    // Top 5
+                    {
+                      type: 'TextBlock',
+                      text: '🏆 Top 5 Leaderboard',
+                      weight: 'Bolder',
+                      size: 'Medium',
+                      spacing: 'Medium'
+                    },
+                    // Player rows
+                    ...top5.map((p, i) => ({
+                      type: 'ColumnSet',
+                      separator: i > 0,
+                      columns: [
+                        { type: 'Column', width: 'auto', items: [{ type: 'TextBlock', text: medals[i], size: 'Medium' }] },
+                        { type: 'Column', width: 'stretch', items: [{ type: 'TextBlock', text: `**${p.display_name}**`, wrap: true }] },
+                        { type: 'Column', width: 'auto', items: [{ type: 'TextBlock', text: `**${p.total_pts || 0} pts**`, color: 'Good', horizontalAlignment: 'Right' }] }
+                      ]
+                    })),
+                    // Gap + players count
+                    {
+                      type: 'TextBlock',
+                      text: `📊 Gap 1st→2nd: **${gap} pts** · 👥 Players: **${players.length}**`,
+                      size: 'Small',
+                      color: 'Accent',
+                      spacing: 'Small'
+                    },
+                    // View leaderboard link
+                    {
+                      type: 'TextBlock',
+                      text: `[🏆 View Full Leaderboard →](${APP_URL}/leaderboard)`,
+                      color: 'Warning',
+                      spacing: 'Small'
+                    },
+                    // Divider
+                    { type: 'TextBlock', text: '---', separator: true },
+                    // Points system
+                    {
+                      type: 'TextBlock',
+                      text: '🎯 Points System',
+                      weight: 'Bolder',
+                      spacing: 'Small'
+                    },
+                    {
+                      type: 'FactSet',
+                      facts: [
+                        { title: 'Correct winner/draw', value: '2 pts' },
+                        { title: 'Correct goal diff',   value: '3 pts' },
+                        { title: 'Exact scoreline',     value: '5 pts' },
+                        { title: '🃏 Joker card',        value: '×2 all pts' },
+                        { title: '🟣 Knockout draw',    value: '+5 pts' },
+                        { title: '🥅 Correct penalties',value: '+10 pts' }
+                      ]
+                    },
+                    // Footer reminder
+                    {
+                      type: 'TextBlock',
+                      text: '⏰ Each match locks **1 hour before kick-off**\nUpcoming matches are still open — predict now!',
+                      wrap: true,
+                      size: 'Small',
+                      color: 'Warning',
+                      spacing: 'Small'
+                    }
+                  ],
+                  actions: [
+                    {
+                      type: 'Action.OpenUrl',
+                      title: '⚽ Predict Matches',
+                      url: `${APP_URL}/matches`
+                    },
+                    {
+                      type: 'Action.OpenUrl',
+                      title: '🏆 Open App',
+                      url: APP_URL
+                    }
+                  ],
+                  msteams: {
+                    width: 'Full'
+                  }
+                }
+              }]
+            }
+
+            // 4. Send to Teams
+            const res = await fetch(TEAMS_WEBHOOK, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(card)
+            })
+
+            const body = await res.text()
+            console.log(`Teams response: ${res.status} ${body}`)
+            if (!res.ok) throw new Error(`Teams webhook failed: ${res.status} ${body}`)
+            console.log(`✅ Day ${dayNum} leaderboard sent to Teams!`)
+            console.log(`   Top player: ${top5[0]?.display_name} with ${top5[0]?.total_pts} pts`)
+          }
+
+          main().catch(e => { console.error('ERROR:', e.message); process.exit(1) })
+          EOF
