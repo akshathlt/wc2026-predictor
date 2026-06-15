@@ -170,16 +170,22 @@ export default function Bids() {
   const [error,    setError]    = useState(false)
 
   const loadData = async () => {
-    if (!player) { setLoading(false); return }
+    if (!player) return  // Don't set loading=false — wait for player to load
 
     try {
+      setLoading(true)
       // Read all data from Supabase — no direct FIFA API call (CORS blocked in browser)
       const [{ data: bidData }, { data: dbMatches }] = await Promise.all([
         supabase.from('bids').select('*').eq('player_id', player.id),
         supabase.from('matches').select('*').eq('stage', 'group').order('match_num'),
       ])
 
-      if (!dbMatches || dbMatches.length === 0) { setError(true); setLoading(false); return }
+      if (!dbMatches || dbMatches.length === 0) {
+        // Matches not yet in DB — show empty state, not error
+        setMatches([])
+        setLoading(false)
+        return
+      }
 
       // Build match list from DB
       const groupMatches = dbMatches.map(m => ({
@@ -230,11 +236,12 @@ export default function Bids() {
 
   useEffect(() => { loadData() }, [player])
 
-  // Safety: never spin forever — timeout after 15s
+  // Safety: never spin forever — only timeout if player is loaded
   useEffect(() => {
-    const t = setTimeout(() => { if (loading) { setLoading(false); setError(true) } }, 15000)
+    if (!player) return
+    const t = setTimeout(() => { if (loading) { setLoading(false); setError(true) } }, 20000)
     return () => clearTimeout(t)
-  }, [])
+  }, [player])
 
   if (loading) return (
     <div className="max-w-4xl mx-auto px-4 py-16 text-center">
