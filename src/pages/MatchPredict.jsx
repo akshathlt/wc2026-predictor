@@ -298,18 +298,69 @@ export default function MatchPredict() {
   const stageOrder = ['A','B','C','D','E','F','G','H','I','J','K','L','r32','qf','sf','3rd','final']
   const sortedGroups = Object.entries(grouped).sort(([a],[b]) => stageOrder.indexOf(a) - stageOrder.indexOf(b))
   const stageLabel = { r32:'Round of 16', qf:'Quarter-Finals', sf:'Semi-Finals', '3rd':'3rd Place Play-off', final:'🏆 World Cup Final' }
-
   const hasKnockoutMatches = sortedGroups.some(([g]) => isKnockout(g))
+
+  // ── View state ──
+  const [view, setView]           = useState('date')   // 'date' | 'group' | 'mypicks'
+  const [dateFilter, setDateFilter] = useState('all')  // 'all' | 'today' | 'tomorrow' | 'week'
+
+  // ── Helpers ──
+  const matchDate = (m) => m.match_date ? new Date(m.match_date) : null
+  const isToday    = (m) => { const d = matchDate(m); if (!d) return false; const t = new Date(); return d.toDateString() === t.toDateString() }
+  const isTomorrow = (m) => { const d = matchDate(m); if (!d) return false; const t = new Date(); t.setDate(t.getDate()+1); return d.toDateString() === t.toDateString() }
+  const isThisWeek = (m) => { const d = matchDate(m); if (!d) return false; const now = Date.now(); return d.getTime() >= now && d.getTime() <= now + 7*86400000 }
+  const hasResult  = (m) => m.home_goals != null
+  const myPts      = (m) => { const p = preds[m.id]; return p ? (p.total_pts||0)+(p.penalty_pts||0) : 0 }
+  const predStatus = (m) => {
+    const p = preds[m.id]
+    if (!p) return 'none'
+    if (!hasResult(m)) return 'pending'
+    if (myPts(m) > 0) return 'win'
+    return 'miss'
+  }
+
+  // ── Filter matches ──
+  const applyDateFilter = (ms) => {
+    if (dateFilter === 'today')    return ms.filter(isToday)
+    if (dateFilter === 'tomorrow') return ms.filter(isTomorrow)
+    if (dateFilter === 'week')     return ms.filter(isThisWeek)
+    return ms
+  }
+
+  // By date — group matches by date string
+  const byDate = () => {
+    const filtered = applyDateFilter(matches)
+    const map = {}
+    filtered.forEach(m => {
+      const key = m.match_date || 'TBD'
+      if (!map[key]) map[key] = []
+      map[key].push(m)
+    })
+    return Object.entries(map).sort(([a],[b]) => a.localeCompare(b))
+  }
+
+  // My picks — only matches with a prediction
+  const myPickMatches = () => applyDateFilter(matches).filter(m => preds[m.id])
+
+  // Card border color based on result
+  const cardBorder = (m) => {
+    const s = predStatus(m)
+    if (s === 'win')  return 'border-green-600/60 bg-green-900/10'
+    if (s === 'miss') return 'border-red-700/50 bg-red-900/10'
+    if (s === 'pending') return 'border-yellow-700/40'
+    return ''
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
+
+      {/* ── Header ── */}
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-3xl font-black mb-1">⚽ Match Predictions</h1>
           <p className="text-slate-400 text-sm">Exact = 5 pts · Right diff = 3 pts · Right winner = 2 pts</p>
           <p className="text-slate-500 text-xs mt-0.5">🟣 Knockout draw = +5 pts · Correct penalties = +10 pts</p>
         </div>
-        {/* Joker counters */}
         <div className="flex gap-2">
           <div className="text-center card px-3 py-2">
             <div className="text-xl font-black text-yellow-400">{jokersLeft}/3</div>
@@ -322,22 +373,47 @@ export default function MatchPredict() {
         </div>
       </div>
 
-      {/* Knockout stage explainer banner — shown once knockouts appear */}
-      {hasKnockoutMatches && (
-        <div className="mb-5 bg-purple-900/20 border border-purple-700/50 rounded-xl p-4">
-          <p className="text-purple-200 font-bold text-sm mb-1">🏆 Knockout Stage Rules</p>
-          <ul className="text-purple-300 text-xs space-y-1">
-            <li>🟣 You have <strong className="text-white">3 fresh Joker cards</strong> for all knockout matches combined</li>
-            <li>⚖️ If you predict a <strong className="text-white">draw</strong> and the match goes to extra time — <strong className="text-yellow-300">+5 bonus pts</strong></li>
-            <li>🥅 Predict the correct <strong className="text-white">penalty shootout winner</strong> — <strong className="text-yellow-300">+10 bonus pts</strong></li>
-            <li>🃏 Use your Joker to <strong className="text-white">double ALL points</strong> for that match (including bonuses!)</li>
-          </ul>
-        </div>
-      )}
+      {/* ── View Tabs ── */}
+      <div className="flex rounded-xl overflow-hidden border border-slate-700 mb-3">
+        {[
+          { id: 'date',    label: '📅 By Date'   },
+          { id: 'group',   label: '📋 By Group'  },
+          { id: 'mypicks', label: '⚽ My Picks'  },
+        ].map(t => (
+          <button key={t.id} onClick={() => setView(t.id)}
+            className={`flex-1 py-2 text-xs font-semibold transition-colors
+              ${view === t.id ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-      {locked && (
-        <div className="mb-6 bg-red-900/30 border border-red-700 rounded-xl p-4 text-red-300 text-sm font-semibold text-center">
-          🔒 Tournament is over — predictions are fully locked.
+      {/* ── Date Filter ── */}
+      <div className="flex gap-2 mb-4 flex-wrap">
+        {[
+          { id: 'all',      label: 'All Dates' },
+          { id: 'today',    label: 'Today'     },
+          { id: 'tomorrow', label: 'Tomorrow'  },
+          { id: 'week',     label: 'This Week' },
+        ].map(f => (
+          <button key={f.id} onClick={() => setDateFilter(f.id)}
+            className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all
+              ${dateFilter === f.id ? 'bg-slate-200 text-slate-900 border-slate-200' : 'border-slate-700 text-slate-400 hover:border-slate-500'}`}>
+            {f.label}
+          </button>
+        ))}
+        {/* Legend */}
+        <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
+          <span><span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" />Won pts</span>
+          <span><span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" />Missed</span>
+          <span><span className="inline-block w-2 h-2 rounded-full bg-yellow-500 mr-1" />Predicted</span>
+        </div>
+      </div>
+
+      {/* ── Knockout banner ── */}
+      {hasKnockoutMatches && (
+        <div className="mb-4 bg-purple-900/20 border border-purple-700/50 rounded-xl p-3">
+          <p className="text-purple-200 font-bold text-xs mb-1">🏆 Knockout Stage — Draw = +5 pts · Correct penalties = +10 pts · Joker doubles all</p>
         </div>
       )}
 
@@ -347,30 +423,114 @@ export default function MatchPredict() {
         </div>
       )}
 
-      {sortedGroups.length === 0 ? (
+      {matches.length === 0 ? (
         <div className="card p-12 text-center">
           <p className="text-5xl mb-4">📋</p>
           <p className="text-xl font-bold mb-2">No matches loaded yet</p>
           <p className="text-slate-400 text-sm">Ask the admin to load the match schedule.</p>
         </div>
       ) : (
-        sortedGroups.map(([group, ms]) => (
-          <div key={group} className="mb-8">
-            <h2 className={`text-lg font-bold mb-3 flex items-center gap-2 ${isKnockout(group) ? 'text-purple-300' : 'text-slate-300'}`}>
-              {stageLabel[group] || `Group ${group}`}
-              {isKnockout(group) && <span className="text-xs bg-purple-700/40 text-purple-300 px-2 py-0.5 rounded-full font-normal">Draw+Pen bonuses active</span>}
-            </h2>
-            <div className="grid sm:grid-cols-2 gap-3">
-              {ms.map(m => (
-                <MatchCard key={m.id} match={m} prediction={preds[m.id]}
-                  onSave={(matchId, home, away, joker, pen) => saveMatch(matchId, home, away, joker, pen, isKnockout(m.stage))}
-                  locked={isMatchLocked(m)}
-                  jokersLeft={isKnockout(m.stage) ? koJokersLeft : jokersLeft} />
+        <>
+          {/* ══ BY DATE VIEW ══ */}
+          {view === 'date' && (
+            <div>
+              {byDate().length === 0 ? (
+                <div className="card p-8 text-center text-slate-400">No matches for selected filter.</div>
+              ) : byDate().map(([date, ms]) => (
+                <div key={date} className="mb-6">
+                  <div className="flex items-center gap-3 mb-3">
+                    <h2 className="text-base font-bold text-slate-200">
+                      {date === 'TBD' ? '📅 TBD' : new Date(date + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'short' })}
+                    </h2>
+                    <div className="flex-1 h-px bg-slate-800" />
+                    <span className="text-xs text-slate-500">{ms.length} match{ms.length > 1 ? 'es' : ''}</span>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {ms.map(m => (
+                      <div key={m.id} className={`rounded-xl border overflow-hidden ${cardBorder(m)} ${jokerCheck(m)}`}>
+                        <MatchCard match={m} prediction={preds[m.id]}
+                          onSave={(matchId, home, away, joker, pen) => saveMatch(matchId, home, away, joker, pen, isKnockout(m.stage))}
+                          locked={isMatchLocked(m)}
+                          jokersLeft={isKnockout(m.stage) ? koJokersLeft : jokersLeft} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
-          </div>
-        ))
+          )}
+
+          {/* ══ BY GROUP VIEW ══ */}
+          {view === 'group' && (
+            <div>
+              {sortedGroups.map(([group, ms]) => {
+                const filtered = applyDateFilter(ms)
+                if (filtered.length === 0) return null
+                return (
+                  <div key={group} className="mb-8">
+                    <h2 className={`text-lg font-bold mb-3 flex items-center gap-2 ${isKnockout(group) ? 'text-purple-300' : 'text-slate-300'}`}>
+                      {stageLabel[group] || `Group ${group}`}
+                      {isKnockout(group) && <span className="text-xs bg-purple-700/40 text-purple-300 px-2 py-0.5 rounded-full font-normal">Bonus active</span>}
+                    </h2>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      {filtered.map(m => (
+                        <div key={m.id} className={`rounded-xl border overflow-hidden ${cardBorder(m)}`}>
+                          <MatchCard match={m} prediction={preds[m.id]}
+                            onSave={(matchId, home, away, joker, pen) => saveMatch(matchId, home, away, joker, pen, isKnockout(m.stage))}
+                            locked={isMatchLocked(m)}
+                            jokersLeft={isKnockout(m.stage) ? koJokersLeft : jokersLeft} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* ══ MY PICKS VIEW ══ */}
+          {view === 'mypicks' && (
+            <div>
+              {myPickMatches().length === 0 ? (
+                <div className="card p-8 text-center">
+                  <p className="text-4xl mb-3">🎯</p>
+                  <p className="text-slate-400">No predictions yet for the selected filter.</p>
+                </div>
+              ) : (
+                <>
+                  {/* Summary bar */}
+                  <div className="card p-4 mb-4 grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <p className="text-2xl font-black text-green-400">{myPickMatches().filter(m => predStatus(m) === 'win').length}</p>
+                      <p className="text-xs text-slate-500">✅ Scoring</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-black text-red-400">{myPickMatches().filter(m => predStatus(m) === 'miss').length}</p>
+                      <p className="text-xs text-slate-500">❌ Missed</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-black text-yellow-400">{myPickMatches().filter(m => predStatus(m) === 'pending').length}</p>
+                      <p className="text-xs text-slate-500">⏳ Pending</p>
+                    </div>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {myPickMatches().map(m => (
+                      <div key={m.id} className={`rounded-xl border overflow-hidden ${cardBorder(m)}`}>
+                        <MatchCard match={m} prediction={preds[m.id]}
+                          onSave={(matchId, home, away, joker, pen) => saveMatch(matchId, home, away, joker, pen, isKnockout(m.stage))}
+                          locked={isMatchLocked(m)}
+                          jokersLeft={isKnockout(m.stage) ? koJokersLeft : jokersLeft} />
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   )
 }
+
+function jokerCheck(m) { return '' }
