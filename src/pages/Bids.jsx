@@ -273,21 +273,69 @@ export default function Bids() {
     return !m || m.homeScore == null
   })
 
-  // Group matches by group name
+  // ── View + filter state ──
+  const [view,       setView]       = useState('date')  // 'date' | 'group' | 'mybids'
+  const [dateFilter, setDateFilter] = useState('all')
+
+  // ── Date helpers ──
+  const matchDate  = (m) => m.date ? new Date(m.date) : null
+  const isToday    = (m) => { const d = matchDate(m); if (!d) return false; return d.toDateString() === new Date().toDateString() }
+  const isTomorrow = (m) => { const d = matchDate(m); if (!d) return false; const t = new Date(); t.setDate(t.getDate()+1); return d.toDateString() === t.toDateString() }
+  const isThisWeek = (m) => { const d = matchDate(m); if (!d) return false; return d.getTime() >= Date.now() && d.getTime() <= Date.now() + 7*86400000 }
+
+  const applyDateFilter = (ms) => {
+    if (dateFilter === 'today')    return ms.filter(isToday)
+    if (dateFilter === 'tomorrow') return ms.filter(isTomorrow)
+    if (dateFilter === 'week')     return ms.filter(isThisWeek)
+    return ms
+  }
+
+  // ── By date grouping ──
+  const byDate = () => {
+    const filtered = applyDateFilter(matches)
+    const map = {}
+    filtered.forEach(m => {
+      const key = m.date ? new Date(m.date).toISOString().split('T')[0] : 'TBD'
+      if (!map[key]) map[key] = []
+      map[key].push(m)
+    })
+    return Object.entries(map).sort(([a],[b]) => a.localeCompare(b))
+  }
+
+  // ── By group grouping ──
   const groups = {}
-  matches.forEach(m => {
+  applyDateFilter(matches).forEach(m => {
     const g = m.groupName
     if (!groups[g]) groups[g] = []
     groups[g].push(m)
   })
 
+  // ── My bids ──
+  const myBidMatches = applyDateFilter(matches).filter(m => bids[m.matchNum])
+
+  // ── Bid status for colour ──
+  const bidStatus = (m) => {
+    const b = bids[m.matchNum]
+    if (!b) return 'none'
+    if (m.homeScore == null) return 'open'
+    const actual = m.homeScore > m.awayScore ? m.home : m.awayScore > m.homeScore ? m.away : 'Draw'
+    return b.pick === actual ? 'won' : 'lost'
+  }
+  const bidBorder = (m) => {
+    const s = bidStatus(m)
+    if (s === 'won')  return 'border-green-600/60 bg-green-900/10'
+    if (s === 'lost') return 'border-red-700/50 bg-red-900/10'
+    if (s === 'open') return 'border-yellow-700/40'
+    return ''
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <h1 className="text-3xl font-black mb-1">💰 Fun Bidding</h1>
-      <p className="text-slate-400 text-sm mb-6">Virtual money only · For fun · Live from FIFA API · Bids lock 1 hour before kick-off</p>
+      <p className="text-slate-400 text-sm mb-4">Virtual money only · For fun · Bids lock 1 hour before kick-off</p>
 
       {/* Balance card */}
-      <div className="card p-5 mb-6 border border-green-800/40">
+      <div className="card p-5 mb-4 border border-green-800/40">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
           <div>
             <p className="text-slate-500 text-xs mb-1">Available Balance</p>
@@ -313,8 +361,45 @@ export default function Bids() {
         <p className="text-xs text-slate-600 text-center mt-1">Starting balance: €{STARTING_BALANCE.toLocaleString()}</p>
       </div>
 
+      {/* ── View Tabs ── */}
+      <div className="flex rounded-xl overflow-hidden border border-slate-700 mb-3">
+        {[
+          { id: 'date',   label: '📅 By Date'  },
+          { id: 'group',  label: '📋 By Group' },
+          { id: 'mybids', label: '💰 My Bids'  },
+        ].map(t => (
+          <button key={t.id} onClick={() => setView(t.id)}
+            className={`flex-1 py-2 text-xs font-semibold transition-colors
+              ${view === t.id ? 'bg-yellow-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Date Filter ── */}
+      <div className="flex gap-2 mb-4 flex-wrap items-center">
+        {[
+          { id: 'all',      label: 'All Dates' },
+          { id: 'today',    label: 'Today'     },
+          { id: 'tomorrow', label: 'Tomorrow'  },
+          { id: 'week',     label: 'This Week' },
+        ].map(f => (
+          <button key={f.id} onClick={() => setDateFilter(f.id)}
+            className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all
+              ${dateFilter === f.id ? 'bg-slate-200 text-slate-900 border-slate-200' : 'border-slate-700 text-slate-400 hover:border-slate-500'}`}>
+            {f.label}
+          </button>
+        ))}
+        {/* Legend */}
+        <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
+          <span><span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" />Won</span>
+          <span><span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" />Lost</span>
+          <span><span className="inline-block w-2 h-2 rounded-full bg-yellow-500 mr-1" />Open</span>
+        </div>
+      </div>
+
       {/* Rules */}
-      <div className="card p-4 mb-6 border border-yellow-700/30 bg-yellow-900/10">
+      <div className="card p-4 mb-4 border border-yellow-700/30 bg-yellow-900/10">
         <h3 className="font-bold text-yellow-400 mb-2">📋 How it works</h3>
         <div className="grid sm:grid-cols-2 gap-1 text-sm text-slate-300">
           <span>🎯 Pick home, away or draw for any match</span>
@@ -326,19 +411,81 @@ export default function Bids() {
         </div>
       </div>
 
-      {/* Match cards grouped by group */}
-      {Object.entries(groups).map(([groupName, gMatches]) => (
-        <div key={groupName} className="mb-8">
-          <h2 className="text-lg font-bold mb-3 text-slate-300">{groupName}</h2>
-          <div className="grid sm:grid-cols-2 gap-3">
-            {gMatches.map(m => (
-              <BidForm key={m.matchNum} match={m} playerId={player.id}
-                existingBid={bids[m.matchNum]} balance={balance}
-                onBidPlaced={loadData} />
-            ))}
+      {/* ══ BY DATE VIEW ══ */}
+      {view === 'date' && (
+        byDate().length === 0 ? (
+          <div className="card p-8 text-center text-slate-400">No matches for selected filter.</div>
+        ) : byDate().map(([date, ms]) => (
+          <div key={date} className="mb-6">
+            <div className="flex items-center gap-3 mb-3">
+              <h2 className="text-base font-bold text-slate-200">
+                {date === 'TBD' ? '📅 TBD' : new Date(date + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'short' })}
+              </h2>
+              <div className="flex-1 h-px bg-slate-800" />
+              <span className="text-xs text-slate-500">{ms.length} match{ms.length > 1 ? 'es' : ''}</span>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {ms.map(m => (
+                <div key={m.matchNum} className={`rounded-xl border overflow-hidden ${bidBorder(m)}`}>
+                  <BidForm match={m} playerId={player.id} existingBid={bids[m.matchNum]} balance={balance} onBidPlaced={loadData} />
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        ))
+      )}
+
+      {/* ══ BY GROUP VIEW ══ */}
+      {view === 'group' && (
+        Object.entries(groups).length === 0 ? (
+          <div className="card p-8 text-center text-slate-400">No matches for selected filter.</div>
+        ) : Object.entries(groups).map(([groupName, gMatches]) => (
+          <div key={groupName} className="mb-8">
+            <h2 className="text-lg font-bold mb-3 text-slate-300">{groupName}</h2>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {gMatches.map(m => (
+                <div key={m.matchNum} className={`rounded-xl border overflow-hidden ${bidBorder(m)}`}>
+                  <BidForm match={m} playerId={player.id} existingBid={bids[m.matchNum]} balance={balance} onBidPlaced={loadData} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+      )}
+
+      {/* ══ MY BIDS VIEW ══ */}
+      {view === 'mybids' && (
+        myBidMatches.length === 0 ? (
+          <div className="card p-8 text-center">
+            <p className="text-4xl mb-3">💰</p>
+            <p className="text-slate-400">No bids placed yet for the selected filter.</p>
+          </div>
+        ) : (
+          <>
+            <div className="card p-4 mb-4 grid grid-cols-3 gap-2 text-center">
+              <div>
+                <p className="text-2xl font-black text-green-400">{myBidMatches.filter(m => bidStatus(m) === 'won').length}</p>
+                <p className="text-xs text-slate-500">✅ Won</p>
+              </div>
+              <div>
+                <p className="text-2xl font-black text-red-400">{myBidMatches.filter(m => bidStatus(m) === 'lost').length}</p>
+                <p className="text-xs text-slate-500">❌ Lost</p>
+              </div>
+              <div>
+                <p className="text-2xl font-black text-yellow-400">{myBidMatches.filter(m => bidStatus(m) === 'open').length}</p>
+                <p className="text-xs text-slate-500">⏳ Open</p>
+              </div>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {myBidMatches.map(m => (
+                <div key={m.matchNum} className={`rounded-xl border overflow-hidden ${bidBorder(m)}`}>
+                  <BidForm match={m} playerId={player.id} existingBid={bids[m.matchNum]} balance={balance} onBidPlaced={loadData} />
+                </div>
+              ))}
+            </div>
+          </>
+        )
+      )}
     </div>
   )
 }
