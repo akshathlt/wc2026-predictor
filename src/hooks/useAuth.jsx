@@ -48,6 +48,7 @@ export function AuthProvider({ children }) {
   const signOut = () => supabase.auth.signOut()
 
   const createProfile = async (displayName, groupCode = 'O2C_WC26', avatarSeed = 'adventurer') => {
+    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Berlin'
     const { data, error } = await supabase
       .from('players')
       .upsert({
@@ -56,6 +57,7 @@ export function AuthProvider({ children }) {
         email: session.user.email,
         group_code: groupCode,
         avatar_seed: avatarSeed,
+        timezone: browserTz,
       }, { onConflict: 'user_id' })
       .select()
       .single()
@@ -63,8 +65,18 @@ export function AuthProvider({ children }) {
     return { data, error }
   }
 
+  const updateTimezone = async (tz) => {
+    const { data, error } = await supabase
+      .from('players')
+      .update({ timezone: tz })
+      .eq('user_id', session.user.id)
+      .select().single()
+    if (!error) setPlayer(data)
+    return { data, error }
+  }
+
   return (
-    <AuthContext.Provider value={{ session, player, setPlayer, signInWithEmail, signInWithPassword, signUpWithPassword, resetPassword, updatePassword, signOut, createProfile }}>
+    <AuthContext.Provider value={{ session, player, setPlayer, signInWithEmail, signInWithPassword, signUpWithPassword, resetPassword, updatePassword, signOut, createProfile, updateTimezone }}>
       {children}
     </AuthContext.Provider>
   )

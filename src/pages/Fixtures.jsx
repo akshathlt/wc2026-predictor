@@ -1,19 +1,11 @@
 import { useEffect, useState } from 'react'
 import { fetchWithFallback } from '../lib/fetchWithFallback'
+import { useAuth } from '../hooks/useAuth'
+import { getUserTimezone, formatMatchTime, formatMatchDate } from '../lib/timezone'
 
 const MATCHES_URL = 'https://api.fifa.com/api/v3/calendar/matches?language=en&count=200&idSeason=285023'
 const STANDINGS_URL = 'https://api.fifa.com/api/v3/calendar/17/285023/289273/standing?language=en&count=200'
 const FLAG_URL = (code) => `https://api.fifa.com/api/v3/picture/flags-sq-1/${code}`
-
-function formatTime(utcDate) {
-  if (!utcDate) return '—'
-  return new Date(utcDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
-function formatDay(utcDate) {
-  if (!utcDate) return ''
-  return new Date(utcDate).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-}
 
 function TeamFlag({ code, name }) {
   const [err, setErr] = useState(false)
@@ -73,7 +65,7 @@ function GroupStandingsPopup({ groupName, standings, onClose }) {
   )
 }
 
-function MatchCard({ match }) {
+function MatchCard({ match, tz })  {
   const isKnockout = match.stage !== 'group'
   const hasResult = match.homeScore != null
   const homeTeam = match.home || match.placeholderA
@@ -97,7 +89,7 @@ function MatchCard({ match }) {
               {match.homeScore} – {match.awayScore}
             </div>
           ) : (
-            <div className="text-white font-bold text-base">{formatTime(match.date)}</div>
+            <div className="text-white font-bold text-base">{formatMatchTime(match.date, tz)}</div>
           )}
         </div>
 
@@ -118,7 +110,7 @@ function MatchCard({ match }) {
   )
 }
 
-function DayGroup({ day, matches, standings }) {
+function DayGroup({ day, matches, standings, tz })  {
   const [expanded, setExpanded] = useState(true)
   const [popup, setPopup] = useState(null)
 
@@ -149,7 +141,7 @@ function DayGroup({ day, matches, standings }) {
 
       {expanded && (
         <div className="grid sm:grid-cols-2 gap-3">
-          {matches.map((m, i) => <MatchCard key={i} match={m} />)}
+          {matches.map((m, i) => <MatchCard key={i} match={m} tz={tz} />)}
         </div>
       )}
 
@@ -158,7 +150,7 @@ function DayGroup({ day, matches, standings }) {
   )
 }
 
-function KnockoutSection({ title, matches }) {
+function KnockoutSection({ title, matches, tz })  {
   const [expanded, setExpanded] = useState(true)
   return (
     <div className="mb-6">
@@ -171,7 +163,7 @@ function KnockoutSection({ title, matches }) {
       </div>
       {expanded && (
         <div className="grid sm:grid-cols-2 gap-3">
-          {matches.map((m, i) => <MatchCard key={i} match={m} />)}
+          {matches.map((m, i) => <MatchCard key={i} match={m} tz={tz} />)}
         </div>
       )}
     </div>
@@ -179,11 +171,13 @@ function KnockoutSection({ title, matches }) {
 }
 
 export default function Fixtures() {
+  const { player } = useAuth()
+  const tz = getUserTimezone(player)
   const [matches, setMatches] = useState([])
   const [standings, setStandings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [view, setView] = useState('group') // 'group' | 'knockout'
+  const [view, setView] = useState('group')
 
   useEffect(() => {
     Promise.all([
@@ -263,7 +257,7 @@ export default function Fixtures() {
   // Group stage: group by day
   const byDay = {}
   groupMatches.forEach(m => {
-    const day = formatDay(m.date)
+    const day = formatMatchDate(m.date, tz)
     if (!byDay[day]) byDay[day] = []
     byDay[day].push(m)
   })
@@ -292,13 +286,21 @@ export default function Fixtures() {
         </div>
       </div>
 
+      {/* Timezone indicator */}
+      {view === 'group' && (
+        <p className="text-xs text-slate-500 mb-4">🌍 Times shown in: <span className="text-green-400">{tz}</span> · Change in your profile</p>
+      )}
+
       {view === 'group' && Object.entries(byDay).map(([day, ms]) => (
-        <DayGroup key={day} day={day} matches={ms} standings={standings} />
+        <DayGroup key={day} day={day} matches={ms} standings={standings} tz={tz} />
       ))}
 
       {view === 'knockout' && stageOrder.filter(s => byStage[s]).map(s => (
-        <KnockoutSection key={s} title={s === 'Final' ? '🏆 Final' : s === 'Play-off for third place' ? '🥉 Third Place Play-off' : s} matches={byStage[s]} />
+        <KnockoutSection key={s} title={s === 'Final' ? '🏆 Final' : s === 'Play-off for third place' ? '🥉 Third Place Play-off' : s} matches={byStage[s]} tz={tz} />
       ))}
     </div>
   )
 }
+
+
+

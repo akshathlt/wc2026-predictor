@@ -53,7 +53,7 @@ function NavDropdown({ label, items, location }) {
 }
 
 export default function Navbar() {
-  const { session, player, signOut } = useAuth()
+  const { session, player, signOut, updateTimezone } = useAuth()
   const location = useLocation()
   const nav = useNavigate()
   const [userOpen, setUserOpen] = useState(false)
@@ -183,13 +183,34 @@ export default function Navbar() {
               </button>
 
               {userOpen && (
-                <div className="absolute right-0 mt-2 w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-xl py-2 z-50">
+                <div className="absolute right-0 mt-2 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-xl py-2 z-50">
+                  {/* Profile header */}
                   <div className="px-4 py-3 border-b border-slate-700 flex items-center gap-3">
                     <Avatar style={player?.avatar_seed} name={player?.display_name || 'player'} size="lg" />
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-white truncate">{player?.display_name || '—'}</p>
                       <p className="text-xs text-slate-400 truncate">{session.user.email}</p>
                     </div>
+                  </div>
+                  {/* Timezone picker */}
+                  <div className="px-4 py-3 border-b border-slate-700">
+                    <p className="text-xs text-slate-400 mb-1.5">🌍 Time zone</p>
+                    <select
+                      value={player?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone}
+                      onChange={e => updateTimezone(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-600 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-green-500">
+                      <option value="Europe/Berlin">🇩🇪 Germany (CET/CEST)</option>
+                      <option value="Europe/London">🇬🇧 London (GMT/BST)</option>
+                      <option value="America/New_York">🇺🇸 New York (ET)</option>
+                      <option value="America/Chicago">🇺🇸 Chicago (CT)</option>
+                      <option value="America/Los_Angeles">🇺🇸 Los Angeles (PT)</option>
+                      <option value="Asia/Dubai">🇦🇪 Dubai (GST)</option>
+                      <option value="Asia/Kolkata">🇮🇳 India (IST)</option>
+                      <option value="Asia/Singapore">🇸🇬 Singapore (SGT)</option>
+                      <option value="Australia/Sydney">🇦🇺 Sydney (AEST)</option>
+                      <option value="UTC">🌐 UTC</option>
+                    </select>
+                    <p className="text-[10px] text-slate-500 mt-1">Match times shown in your timezone</p>
                   </div>
                   <button onClick={() => { setUserOpen(false); signOut(); nav('/') }}
                     className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-800 transition-colors">
