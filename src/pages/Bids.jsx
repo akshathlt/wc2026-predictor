@@ -163,11 +163,13 @@ function BidForm({ match, playerId, existingBid, balance, onBidPlaced }) {
 
 export default function Bids() {
   const { player } = useAuth()
-  const [matches,  setMatches]  = useState([])
-  const [bids,     setBids]     = useState({})
-  const [balance,  setBalance]  = useState(STARTING_BALANCE)
-  const [loading,  setLoading]  = useState(true)
-  const [error,    setError]    = useState(false)
+  const [matches,    setMatches]    = useState([])
+  const [bids,       setBids]       = useState({})
+  const [balance,    setBalance]    = useState(STARTING_BALANCE)
+  const [loading,    setLoading]    = useState(true)
+  const [error,      setError]      = useState(false)
+  const [view,       setView]       = useState('date')
+  const [dateFilter, setDateFilter] = useState('all')
 
   const loadData = async () => {
     if (!player) return  // Don't set loading=false — wait for player to load
@@ -272,10 +274,6 @@ export default function Bids() {
     const m = matches.find(mx => mx.matchNum === b.match_num)
     return !m || m.homeScore == null
   })
-
-  // ── View + filter state ──
-  const [view,       setView]       = useState('date')  // 'date' | 'group' | 'mybids'
-  const [dateFilter, setDateFilter] = useState('all')
 
   // ── Date helpers ──
   const matchDate  = (m) => m.date ? new Date(m.date) : null
