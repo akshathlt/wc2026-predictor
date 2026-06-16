@@ -268,6 +268,20 @@ export default function MatchPredict() {
     })
   }, [player])
 
+  // Calculate actual jokers remaining from saved predictions
+  const jokersUsedInGroup = Object.values(preds).filter(p => {
+    const m = matches.find(mx => mx.id === p.match_id)
+    return p.joker_used && m && !isKnockout(m.stage)
+  }).length
+
+  const jokersUsedInKO = Object.values(preds).filter(p => {
+    const m = matches.find(mx => mx.id === p.match_id)
+    return p.joker_used && m && isKnockout(m.stage)
+  }).length
+
+  const effectiveGroupJokers    = Math.max(0, 3 - jokersUsedInGroup)
+  const effectiveKOJokers       = Math.max(0, 3 - jokersUsedInKO)
+
   const saveMatch = async (matchId, home, away, jokerUsed, penWinner, isKO) => {
     const prev = preds[matchId]
     const wasJoker = prev?.joker_used ?? false
@@ -372,14 +386,14 @@ export default function MatchPredict() {
         </div>
         <div className="flex gap-2">
           <div className="text-center card px-3 py-2">
-            <div className={`text-xl font-black ${jokersLeft === 0 ? 'text-red-400' : 'text-yellow-400'}`}>{jokersLeft}/3</div>
+            <div className={`text-xl font-black ${effectiveGroupJokers === 0 ? 'text-red-400' : 'text-yellow-400'}`}>{effectiveGroupJokers}/3</div>
             <div className="text-[10px] text-slate-400">Group 🃏</div>
-            {jokersLeft === 0 && <div className="text-[9px] text-red-400 mt-0.5">All used!</div>}
+            {effectiveGroupJokers === 0 && <div className="text-[9px] text-red-400 mt-0.5">All used!</div>}
           </div>
           <div className="text-center card px-3 py-2 border-purple-700/50">
-            <div className={`text-xl font-black ${koJokersLeft === 0 ? 'text-red-400' : 'text-purple-300'}`}>{koJokersLeft}/3</div>
+            <div className={`text-xl font-black ${effectiveKOJokers === 0 ? 'text-red-400' : 'text-purple-300'}`}>{effectiveKOJokers}/3</div>
             <div className="text-[10px] text-slate-400">Knockout 🃏</div>
-            {koJokersLeft === 0 && <div className="text-[9px] text-red-400 mt-0.5">All used!</div>}
+            {effectiveKOJokers === 0 && <div className="text-[9px] text-red-400 mt-0.5">All used!</div>}
           </div>
         </div>
       </div>
@@ -462,7 +476,7 @@ export default function MatchPredict() {
                         <MatchCard match={m} prediction={preds[m.id]}
                           onSave={(matchId, home, away, joker, pen) => saveMatch(matchId, home, away, joker, pen, isKnockout(m.stage))}
                           locked={isMatchLocked(m)}
-                          jokersLeft={isKnockout(m.stage) ? koJokersLeft : jokersLeft} />
+                          jokersLeft={isKnockout(m.stage) ? effectiveKOJokers : effectiveGroupJokers} />
                       </div>
                     ))}
                   </div>
@@ -489,7 +503,7 @@ export default function MatchPredict() {
                           <MatchCard match={m} prediction={preds[m.id]}
                             onSave={(matchId, home, away, joker, pen) => saveMatch(matchId, home, away, joker, pen, isKnockout(m.stage))}
                             locked={isMatchLocked(m)}
-                            jokersLeft={isKnockout(m.stage) ? koJokersLeft : jokersLeft} />
+                            jokersLeft={isKnockout(m.stage) ? effectiveKOJokers : effectiveGroupJokers} />
                         </div>
                       ))}
                     </div>
@@ -530,7 +544,7 @@ export default function MatchPredict() {
                         <MatchCard match={m} prediction={preds[m.id]}
                           onSave={(matchId, home, away, joker, pen) => saveMatch(matchId, home, away, joker, pen, isKnockout(m.stage))}
                           locked={isMatchLocked(m)}
-                          jokersLeft={isKnockout(m.stage) ? koJokersLeft : jokersLeft} />
+                          jokersLeft={isKnockout(m.stage) ? effectiveKOJokers : effectiveGroupJokers} />
                       </div>
                     ))}
                   </div>
@@ -545,3 +559,4 @@ export default function MatchPredict() {
 }
 
 function jokerCheck(m) { return '' }
+
