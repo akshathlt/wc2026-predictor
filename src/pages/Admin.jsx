@@ -170,9 +170,9 @@ export default function Admin() {
       { data: specialAnswers },
       { data: bids },
     ] = await Promise.all([
-      supabase.from('players').select('id, display_name, email, total_pts, stage_pts'),
+      supabase.from('players').select('id, display_name, email, total_pts, stage_pts, jokers_left, knockout_jokers_left'),
       supabase.from('group_predictions').select('player_id'),
-      supabase.from('match_predictions').select('player_id, match_id'),
+      supabase.from('match_predictions').select('player_id, match_id, joker_used'),
       supabase.from('special_answers').select('player_id'),
       supabase.from('bids').select('player_id, amount, pick, match_num'),
     ])
@@ -182,21 +182,28 @@ export default function Admin() {
 
     // Per-player stats
     const playerStats = (allPlayers || []).map(p => {
-      const groupCount  = (groupPreds || []).filter(r => r.player_id === p.id).length
-      const matchCount  = (matchPreds || []).filter(r => r.player_id === p.id).length
-      const specialCount = (specialAnswers || []).filter(r => r.player_id === p.id).length
-      const playerBids  = (bids || []).filter(r => r.player_id === p.id)
-      const totalBidAmt = playerBids.reduce((s, b) => s + b.amount, 0)
-      const groupDone   = groupCount >= totalGroups * 4
-      const matchDone   = matchCount > 0
-      const specialDone = specialCount > 0
+      const groupCount    = (groupPreds || []).filter(r => r.player_id === p.id).length
+      const playerMatchPreds = (matchPreds || []).filter(r => r.player_id === p.id)
+      const matchCount    = playerMatchPreds.length
+      const specialCount  = (specialAnswers || []).filter(r => r.player_id === p.id).length
+      const playerBids    = (bids || []).filter(r => r.player_id === p.id)
+      const totalBidAmt   = playerBids.reduce((s, b) => s + b.amount, 0)
+      const groupDone     = groupCount >= totalGroups * 4
+      const matchDone     = matchCount > 0
+      const specialDone   = specialCount > 0
+
+      // Jokers: used = 3 - remaining
+      const groupJokersUsed = 3 - (p.jokers_left ?? 3)
+      const koJokersUsed    = 3 - (p.knockout_jokers_left ?? 3)
 
       return {
         ...p,
-        groupCount,  matchCount, specialCount,
-        groupDone,   matchDone,  specialDone,
-        bidCount:    playerBids.length,
+        groupCount, matchCount, specialCount,
+        groupDone,  matchDone,  specialDone,
+        bidCount:      playerBids.length,
         totalBidAmt,
+        groupJokersUsed,
+        koJokersUsed,
         allDone: groupDone && matchDone && specialDone,
       }
     })
@@ -420,8 +427,8 @@ export default function Admin() {
                 <table className="w-full text-sm">
                   <thead className="bg-slate-800/60">
                     <tr>
-                      {['Player', 'Groups', 'Match Scores', 'Special Qs', 'Bids Placed', 'Status'].map(h => (
-                        <th key={h} className="text-left px-4 py-2.5 text-slate-400 text-xs uppercase">{h}</th>
+                      {['Player', 'Groups', 'Match Scores', 'Special Qs', 'Bids', 'Group 🃏', 'KO 🃏', 'Status'].map(h => (
+                        <th key={h} className="text-left px-4 py-2.5 text-slate-400 text-xs uppercase whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -434,20 +441,38 @@ export default function Admin() {
                         </td>
                         <td className="px-4 py-2.5">
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${p.groupDone ? 'bg-green-900/50 text-green-300' : 'bg-slate-700 text-slate-400'}`}>
-                            {p.groupDone ? '✓ Done' : `${Math.floor(p.groupCount/4)}/12 groups`}
+                            {p.groupDone ? '✓ Done' : `${Math.floor(p.groupCount/4)}/12`}
                           </span>
                         </td>
                         <td className="px-4 py-2.5">
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${p.matchCount > 0 ? 'bg-green-900/50 text-green-300' : 'bg-slate-700 text-slate-400'}`}>
-                            {p.matchCount > 0 ? `✓ ${p.matchCount} matches` : '✗ None'}
+                            {p.matchCount > 0 ? `✓ ${p.matchCount}` : '✗ None'}
                           </span>
                         </td>
                         <td className="px-4 py-2.5">
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${p.specialDone ? 'bg-green-900/50 text-green-300' : 'bg-slate-700 text-slate-400'}`}>
-                            {p.specialDone ? `✓ ${p.specialCount} answers` : '✗ None'}
+                            {p.specialDone ? `✓ ${p.specialCount}` : '✗ None'}
                           </span>
                         </td>
-                        <td className="px-4 py-2.5 text-slate-300 text-sm">{p.bidCount} bids</td>
+                        <td className="px-4 py-2.5 text-slate-300 text-xs">{p.bidCount}</td>
+                        {/* Group Jokers used */}
+                        <td className="px-4 py-2.5 text-center">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full
+                            ${p.groupJokersUsed === 0 ? 'bg-slate-700 text-slate-500'
+                            : p.groupJokersUsed === 3 ? 'bg-red-900/50 text-red-300'
+                            : 'bg-yellow-900/50 text-yellow-300'}`}>
+                            {p.groupJokersUsed}/3
+                          </span>
+                        </td>
+                        {/* Knockout Jokers used */}
+                        <td className="px-4 py-2.5 text-center">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full
+                            ${p.koJokersUsed === 0 ? 'bg-slate-700 text-slate-500'
+                            : p.koJokersUsed === 3 ? 'bg-red-900/50 text-red-300'
+                            : 'bg-purple-900/50 text-purple-300'}`}>
+                            {p.koJokersUsed}/3
+                          </span>
+                        </td>
                         <td className="px-4 py-2.5">
                           <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${p.allDone ? 'bg-green-700 text-white' : 'bg-yellow-900/50 text-yellow-300'}`}>
                             {p.allDone ? '🟢 Complete' : '🟡 Partial'}
