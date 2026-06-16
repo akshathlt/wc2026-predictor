@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { fetchWithFallback } from '../lib/fetchWithFallback'
@@ -166,6 +166,18 @@ export default function Bids() {
   const [matches,    setMatches]    = useState([])
   const [bids,       setBids]       = useState({})
   const [balance,    setBalance]    = useState(STARTING_BALANCE)
+  const balanceCardRef = useRef(null)
+  const [showStickyBar, setShowStickyBar] = useState(false)
+
+  // Show sticky bar only when balance card scrolls out of view
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowStickyBar(!entry.isIntersecting),
+      { threshold: 0, rootMargin: '-60px 0px 0px 0px' }
+    )
+    if (balanceCardRef.current) observer.observe(balanceCardRef.current)
+    return () => observer.disconnect()
+  }, [])
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState(false)
   const [view,       setView]       = useState('date')
@@ -335,39 +347,35 @@ export default function Bids() {
       <h1 className="text-3xl font-black mb-1">💰 Fun Bidding</h1>
       <p className="text-slate-400 text-sm mb-4">Virtual money only · For fun · Bids lock 1 hour before kick-off</p>
 
-      {/* ── Sticky balance bar — always visible while scrolling ── */}
-      <div className="sticky top-0 z-20 mb-4"
-           style={{backdropFilter:'blur(12px)',background:'rgba(10,14,30,0.92)',borderBottom:'1px solid rgba(255,255,255,0.07)'}}>
-        <div className="flex items-center justify-between gap-2 py-2 px-1 flex-wrap">
-          {/* Balance */}
-          <div className="flex items-center gap-2">
-            <span className="text-slate-500 text-xs">Balance</span>
-            <span className={`text-lg font-black ${balance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              €{balance.toLocaleString()}
-            </span>
-            {balance < 0 && <span className="text-[10px] text-red-400 bg-red-900/30 px-1.5 py-0.5 rounded">Overbet!</span>}
-          </div>
-          {/* Progress bar */}
-          <div className="flex-1 mx-2 hidden sm:block">
-            <div className="bg-slate-800 rounded-full h-1.5 overflow-hidden">
-              <div className="h-full rounded-full transition-all"
-                style={{
-                  width: `${Math.max(0, Math.min(100, (balance / STARTING_BALANCE) * 100))}%`,
-                  background: balance >= 0 ? '#22c55e' : '#ef4444'
-                }} />
+      {/* ── Sticky balance bar — only visible when balance card scrolled out of view ── */}
+      {showStickyBar && (
+        <div className="fixed top-14 left-0 right-0 z-30 px-4"
+             style={{backdropFilter:'blur(12px)',background:'rgba(10,14,30,0.95)',borderBottom:'1px solid rgba(255,255,255,0.08)'}}>
+          <div className="max-w-4xl mx-auto flex items-center justify-between gap-2 py-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500 text-xs">Balance</span>
+              <span className={`text-lg font-black ${balance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                €{balance.toLocaleString()}
+              </span>
+              {balance < 0 && <span className="text-[10px] text-red-400 bg-red-900/30 px-1.5 py-0.5 rounded">Overbet!</span>}
+            </div>
+            <div className="flex-1 mx-2 hidden sm:block">
+              <div className="bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                <div className="h-full rounded-full transition-all"
+                  style={{width:`${Math.max(0,Math.min(100,(balance/STARTING_BALANCE)*100))}%`,background:balance>=0?'#22c55e':'#ef4444'}} />
+              </div>
+            </div>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="text-yellow-400 font-bold">{openBids.length} open</span>
+              <span className="text-green-400 font-bold">{wonBids.length} won 🎉</span>
+              <span className="text-red-400 font-bold">{lostBids.length} lost 💸</span>
             </div>
           </div>
-          {/* Stats */}
-          <div className="flex items-center gap-3 text-xs">
-            <span className="text-yellow-400 font-bold">{openBids.length} open</span>
-            <span className="text-green-400 font-bold">{wonBids.length} won 🎉</span>
-            <span className="text-red-400 font-bold">{lostBids.length} lost 💸</span>
-          </div>
         </div>
-      </div>
+      )}
 
-      {/* Balance detail card — shown at top, can scroll past */}
-      <div className="card p-4 mb-4 border border-green-800/40">
+      {/* Balance detail card — ref tracked so sticky bar knows when to appear */}
+      <div ref={balanceCardRef} className="card p-4 mb-4 border border-green-800/40">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
           <div>
             <p className="text-slate-500 text-xs mb-1">Available Balance</p>
@@ -393,8 +401,11 @@ export default function Bids() {
         <p className="text-xs text-slate-600 text-center mt-1">Starting balance: €{STARTING_BALANCE.toLocaleString()}</p>
       </div>
 
-      {/* ── View Tabs ── */}
-      <div className="flex rounded-xl overflow-hidden border border-slate-700 mb-3">
+      {/* ── View Tabs + Filters — sticky below navbar ── */}
+      <div className="sticky top-14 z-20 mb-4 -mx-4 px-4 py-2"
+           style={{backdropFilter:'blur(12px)',background:'rgba(10,14,30,0.95)',borderBottom:'1px solid rgba(255,255,255,0.06)'}}>
+        {/* Tabs */}
+        <div className="flex rounded-xl overflow-hidden border border-slate-700 mb-2">
         {[
           { id: 'date',   label: '📅 By Date'  },
           { id: 'group',  label: '📋 By Group' },
@@ -429,6 +440,7 @@ export default function Bids() {
           <span><span className="inline-block w-2 h-2 rounded-full bg-yellow-500 mr-1" />Open</span>
         </div>
       </div>
+      </div>{/* end sticky tabs+filters */}
 
       {/* Rules */}
       <div className="card p-4 mb-4 border border-yellow-700/30 bg-yellow-900/10">
