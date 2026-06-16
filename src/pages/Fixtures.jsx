@@ -67,36 +67,48 @@ function GroupStandingsPopup({ groupName, standings, onClose }) {
 
 function MatchCard({ match, tz })  {
   const isKnockout = match.stage !== 'group'
-  const hasResult = match.homeScore != null
-  const homeTeam = match.home || match.placeholderA
-  const awayTeam = match.away || match.placeholderB
-  const homeCode = match.homeCode
-  const awayCode = match.awayCode
+  const hasResult  = match.homeScore != null
+  const homeTeam   = match.home || match.placeholderA || 'TBD'
+  const awayTeam   = match.away || match.placeholderB || 'TBD'
+  const homeCode   = match.homeCode
+  const awayCode   = match.awayCode
+  const isLive     = match.isLive
+  const isHT       = match.isHT
+  const matchMin   = match.matchTime
 
   return (
-    <div className={`card p-4 ${isKnockout ? 'border-purple-700/40' : ''}`}>
+    <div className={`card p-4 ${isKnockout ? 'border-purple-700/40' : ''} ${isLive ? 'border-red-500/60 bg-red-950/20' : isHT ? 'border-orange-500/50' : ''}`}>
       <div className="flex items-center gap-3">
         {/* Home */}
         <div className="flex-1 flex items-center justify-end gap-2">
-          <span className="font-semibold text-sm text-right">{homeTeam}</span>
+          <span className={`font-semibold text-sm text-right ${hasResult && match.homeScore > match.awayScore ? 'text-white' : ''}`}>{homeTeam}</span>
           {homeCode && <TeamFlag code={homeCode} name={homeTeam} />}
         </div>
 
         {/* Score / Time */}
-        <div className="text-center min-w-[80px]">
+        <div className="text-center min-w-[90px]">
           {hasResult ? (
-            <div className="px-3 py-1 bg-green-900/40 border border-green-700 rounded-lg text-green-300 font-black text-lg">
+            <div className={`px-3 py-1 rounded-lg font-black text-lg ${isLive || isHT ? 'bg-red-900/50 border border-red-600 text-red-200' : 'bg-green-900/40 border border-green-700 text-green-300'}`}>
               {match.homeScore} – {match.awayScore}
             </div>
           ) : (
             <div className="text-white font-bold text-base">{formatMatchTime(match.date, tz)}</div>
           )}
+          {/* Live indicator */}
+          {isLive && (
+            <div className="flex items-center justify-center gap-1 mt-1">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-[10px] text-red-400 font-bold">{matchMin ? `${matchMin}'` : 'LIVE'}</span>
+            </div>
+          )}
+          {isHT && <div className="text-[10px] text-orange-400 font-bold mt-1">⏸ HT</div>}
+          {hasResult && !isLive && !isHT && <div className="text-[9px] text-slate-500 mt-0.5">FT</div>}
         </div>
 
         {/* Away */}
         <div className="flex-1 flex items-center gap-2">
           {awayCode && <TeamFlag code={awayCode} name={awayTeam} />}
-          <span className="font-semibold text-sm">{awayTeam}</span>
+          <span className={`font-semibold text-sm ${hasResult && match.awayScore > match.homeScore ? 'text-white' : ''}`}>{awayTeam}</span>
         </div>
       </div>
 
@@ -186,20 +198,23 @@ export default function Fixtures() {
     ]).then(([mData, sData]) => {
       if (mData) {
         const parsed = (mData.Results || []).map(m => ({
-          date: m.Date,
-          home: m.Home?.ShortClubName,
-          away: m.Away?.ShortClubName,
-          homeCode: m.Home?.IdCountry,
-          awayCode: m.Away?.IdCountry,
-          homeScore: m.Home?.Score,
-          awayScore: m.Away?.Score,
+          date:      m.Date,
+          home:      m.Home?.ShortClubName,
+          away:      m.Away?.ShortClubName,
+          homeCode:  m.Home?.IdCountry,
+          awayCode:  m.Away?.IdCountry,
+          homeScore: m.HomeTeamScore ?? m.Home?.Score,
+          awayScore: m.AwayTeamScore ?? m.Away?.Score,
           stageName: m.StageName?.[0]?.Description || '',
           groupName: m.GroupName?.[0]?.Description || '',
-          venue: m.Stadium ? `${m.Stadium.Name?.[0]?.Description} (${m.Stadium.CityName?.[0]?.Description})` : '',
-          matchNum: m.MatchNumber,
-          stage: m.StageName?.[0]?.Description === 'First Stage' ? 'group' : 'knockout',
+          venue:     m.Stadium ? `${m.Stadium.Name?.[0]?.Description} (${m.Stadium.CityName?.[0]?.Description})` : '',
+          matchNum:  m.MatchNumber,
+          stage:     m.StageName?.[0]?.Description === 'First Stage' ? 'group' : 'knockout',
           placeholderA: m.PlaceHolderA,
           placeholderB: m.PlaceHolderB,
+          isLive:    m.MatchStatus === 3,
+          isHT:      m.MatchStatus === 12,
+          matchTime: m.MatchTime,
         }))
         setMatches(parsed)
       } else {

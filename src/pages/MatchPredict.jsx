@@ -89,7 +89,7 @@ function LockCountdown({ match }) {
   )
 }
 
-function MatchCard({ match, prediction, onSave, locked, jokersLeft = 3 }) {
+function MatchCard({ match, prediction, onSave, locked, jokersLeft = 3, koJokersLocked = false }) {
   const [home,          setHome]          = useState(prediction?.predicted_home ?? '')
   const [away,          setAway]          = useState(prediction?.predicted_away ?? '')
   const [joker,         setJoker]         = useState(prediction?.joker_used ?? false)
@@ -211,6 +211,11 @@ function MatchCard({ match, prediction, onSave, locked, jokersLeft = 3 }) {
       {/* Joker + Save */}
       {!isLocked && !hasResult && (
         <div className="flex items-center gap-3">
+          {knockout && koJokersLocked ? (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-800 text-xs font-semibold text-slate-600 cursor-not-allowed opacity-60">
+              🔒 KO Jokers unlock after groups
+            </span>
+          ) : (
           <button onClick={() => { if (noJokersLeft && !joker) return; setJoker(j => !j) }}
             disabled={noJokersLeft && !joker}
             title={noJokersLeft && !joker ? '🚫 No jokers left — all 3 used!' : 'Double your points for this match'}
@@ -220,6 +225,7 @@ function MatchCard({ match, prediction, onSave, locked, jokersLeft = 3 }) {
                 : 'border-slate-700 hover:border-slate-500 text-slate-400'}`}>
             🃏 {joker ? 'JOKER ON ✓' : noJokersLeft ? '0 jokers left' : 'Use Joker'}
           </button>
+          )}
           <button onClick={save} disabled={saving || home === '' || away === ''}
             className={`ml-auto px-4 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-40
               ${saved ? 'bg-green-700 text-white' : 'bg-slate-700 hover:bg-slate-600 text-white'}`}>
@@ -279,8 +285,13 @@ export default function MatchPredict() {
     return p.joker_used && m && isKnockout(m.stage)
   }).length
 
-  const effectiveGroupJokers    = Math.max(0, 3 - jokersUsedInGroup)
-  const effectiveKOJokers       = Math.max(0, 3 - jokersUsedInKO)
+  const effectiveGroupJokers = Math.max(0, 3 - jokersUsedInGroup)
+  const effectiveKOJokers    = Math.max(0, 3 - jokersUsedInKO)
+
+  // Knockout jokers only available after group stage ends (Jun 27 2026)
+  const groupStageEnded = Date.now() > new Date('2026-06-27T23:59:00Z').getTime()
+  // Also check if all group matches in DB are done (more reliable)
+  const allGroupMatchesDone = matches.filter(m => m.stage === 'group').every(m => m.home_goals != null)
 
   const saveMatch = async (matchId, home, away, jokerUsed, penWinner, isKO) => {
     const prev = preds[matchId]
@@ -391,9 +402,11 @@ export default function MatchPredict() {
             {effectiveGroupJokers === 0 && <div className="text-[9px] text-red-400 mt-0.5">All used!</div>}
           </div>
           <div className="text-center card px-3 py-2 border-purple-700/50">
-            <div className={`text-xl font-black ${effectiveKOJokers === 0 ? 'text-red-400' : 'text-purple-300'}`}>{effectiveKOJokers}/3</div>
+            <div className={`text-xl font-black ${!groupStageEnded && !allGroupMatchesDone ? 'text-slate-600' : effectiveKOJokers === 0 ? 'text-red-400' : 'text-purple-300'}`}>{effectiveKOJokers}/3</div>
             <div className="text-[10px] text-slate-400">Knockout 🃏</div>
-            {effectiveKOJokers === 0 && <div className="text-[9px] text-red-400 mt-0.5">All used!</div>}
+            {!groupStageEnded && !allGroupMatchesDone
+              ? <div className="text-[9px] text-slate-500 mt-0.5">🔒 After groups</div>
+              : effectiveKOJokers === 0 && <div className="text-[9px] text-red-400 mt-0.5">All used!</div>}
           </div>
         </div>
       </div>
@@ -476,7 +489,7 @@ export default function MatchPredict() {
                         <MatchCard match={m} prediction={preds[m.id]}
                           onSave={(matchId, home, away, joker, pen) => saveMatch(matchId, home, away, joker, pen, isKnockout(m.stage))}
                           locked={isMatchLocked(m)}
-                          jokersLeft={isKnockout(m.stage) ? effectiveKOJokers : effectiveGroupJokers} />
+                          jokersLeft={isKnockout(m.stage) ? effectiveKOJokers : effectiveGroupJokers} koJokersLocked={!groupStageEnded && !allGroupMatchesDone} />
                       </div>
                     ))}
                   </div>
@@ -503,7 +516,7 @@ export default function MatchPredict() {
                           <MatchCard match={m} prediction={preds[m.id]}
                             onSave={(matchId, home, away, joker, pen) => saveMatch(matchId, home, away, joker, pen, isKnockout(m.stage))}
                             locked={isMatchLocked(m)}
-                            jokersLeft={isKnockout(m.stage) ? effectiveKOJokers : effectiveGroupJokers} />
+                            jokersLeft={isKnockout(m.stage) ? effectiveKOJokers : effectiveGroupJokers} koJokersLocked={!groupStageEnded && !allGroupMatchesDone} />
                         </div>
                       ))}
                     </div>
@@ -544,7 +557,7 @@ export default function MatchPredict() {
                         <MatchCard match={m} prediction={preds[m.id]}
                           onSave={(matchId, home, away, joker, pen) => saveMatch(matchId, home, away, joker, pen, isKnockout(m.stage))}
                           locked={isMatchLocked(m)}
-                          jokersLeft={isKnockout(m.stage) ? effectiveKOJokers : effectiveGroupJokers} />
+                          jokersLeft={isKnockout(m.stage) ? effectiveKOJokers : effectiveGroupJokers} koJokersLocked={!groupStageEnded && !allGroupMatchesDone} />
                       </div>
                     ))}
                   </div>
@@ -559,4 +572,5 @@ export default function MatchPredict() {
 }
 
 function jokerCheck(m) { return '' }
+
 
