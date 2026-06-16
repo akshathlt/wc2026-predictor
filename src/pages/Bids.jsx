@@ -335,8 +335,39 @@ export default function Bids() {
       <h1 className="text-3xl font-black mb-1">💰 Fun Bidding</h1>
       <p className="text-slate-400 text-sm mb-4">Virtual money only · For fun · Bids lock 1 hour before kick-off</p>
 
-      {/* Balance card */}
-      <div className="card p-5 mb-4 border border-green-800/40">
+      {/* ── Sticky balance bar — always visible while scrolling ── */}
+      <div className="sticky top-0 z-20 mb-4"
+           style={{backdropFilter:'blur(12px)',background:'rgba(10,14,30,0.92)',borderBottom:'1px solid rgba(255,255,255,0.07)'}}>
+        <div className="flex items-center justify-between gap-2 py-2 px-1 flex-wrap">
+          {/* Balance */}
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500 text-xs">Balance</span>
+            <span className={`text-lg font-black ${balance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              €{balance.toLocaleString()}
+            </span>
+            {balance < 0 && <span className="text-[10px] text-red-400 bg-red-900/30 px-1.5 py-0.5 rounded">Overbet!</span>}
+          </div>
+          {/* Progress bar */}
+          <div className="flex-1 mx-2 hidden sm:block">
+            <div className="bg-slate-800 rounded-full h-1.5 overflow-hidden">
+              <div className="h-full rounded-full transition-all"
+                style={{
+                  width: `${Math.max(0, Math.min(100, (balance / STARTING_BALANCE) * 100))}%`,
+                  background: balance >= 0 ? '#22c55e' : '#ef4444'
+                }} />
+            </div>
+          </div>
+          {/* Stats */}
+          <div className="flex items-center gap-3 text-xs">
+            <span className="text-yellow-400 font-bold">{openBids.length} open</span>
+            <span className="text-green-400 font-bold">{wonBids.length} won 🎉</span>
+            <span className="text-red-400 font-bold">{lostBids.length} lost 💸</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Balance detail card — shown at top, can scroll past */}
+      <div className="card p-4 mb-4 border border-green-800/40">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
           <div>
             <p className="text-slate-500 text-xs mb-1">Available Balance</p>
