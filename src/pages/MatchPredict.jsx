@@ -102,9 +102,16 @@ function MatchCard({ match, prediction, onSave, locked, jokersLeft = 3 }) {
   const isDraw      = home !== '' && away !== '' && Number(home) === Number(away)
   const hasResult   = match.home_goals != null
   const resultDraw  = hasResult && match.home_goals === match.away_goals
+  const noJokersLeft = jokersLeft <= 0
 
   const save = async () => {
     if (home === '' || away === '') return
+    // If joker is ON but no jokers available (toggled before running out) — auto remove joker
+    if (joker && noJokersLeft) {
+      setJoker(false)
+      setSaved(false)
+      return
+    }
     setSaving(true)
     await onSave(match.id, Number(home), Number(away), joker, knockout && isDraw ? penWinner : '')
     setSaving(false); setSaved(true)
@@ -204,12 +211,14 @@ function MatchCard({ match, prediction, onSave, locked, jokersLeft = 3 }) {
       {/* Joker + Save */}
       {!isLocked && !hasResult && (
         <div className="flex items-center gap-3">
-          <button onClick={() => setJoker(j => !j)}
-            disabled={!joker && jokersLeft <= 0}
-            title={!joker && jokersLeft <= 0 ? 'No jokers left!' : 'Double your points for this match'}
+          <button onClick={() => { if (noJokersLeft && !joker) return; setJoker(j => !j) }}
+            disabled={noJokersLeft && !joker}
+            title={noJokersLeft && !joker ? '🚫 No jokers left — all 3 used!' : 'Double your points for this match'}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all
-              ${joker ? 'border-yellow-500 bg-yellow-900/30 text-yellow-300' : jokersLeft <= 0 ? 'border-slate-800 text-slate-600 cursor-not-allowed' : 'border-slate-700 hover:border-slate-500 text-slate-400'}`}>
-            🃏 {joker ? 'JOKER ON' : jokersLeft <= 0 ? 'No jokers' : 'Use Joker'}
+              ${joker ? 'border-yellow-500 bg-yellow-900/30 text-yellow-300'
+                : noJokersLeft ? 'border-slate-800 text-slate-600 cursor-not-allowed opacity-50'
+                : 'border-slate-700 hover:border-slate-500 text-slate-400'}`}>
+            🃏 {joker ? 'JOKER ON ✓' : noJokersLeft ? '0 jokers left' : 'Use Joker'}
           </button>
           <button onClick={save} disabled={saving || home === '' || away === ''}
             className={`ml-auto px-4 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-40
@@ -363,12 +372,14 @@ export default function MatchPredict() {
         </div>
         <div className="flex gap-2">
           <div className="text-center card px-3 py-2">
-            <div className="text-xl font-black text-yellow-400">{jokersLeft}/3</div>
+            <div className={`text-xl font-black ${jokersLeft === 0 ? 'text-red-400' : 'text-yellow-400'}`}>{jokersLeft}/3</div>
             <div className="text-[10px] text-slate-400">Group 🃏</div>
+            {jokersLeft === 0 && <div className="text-[9px] text-red-400 mt-0.5">All used!</div>}
           </div>
           <div className="text-center card px-3 py-2 border-purple-700/50">
-            <div className="text-xl font-black text-purple-300">{koJokersLeft}/3</div>
+            <div className={`text-xl font-black ${koJokersLeft === 0 ? 'text-red-400' : 'text-purple-300'}`}>{koJokersLeft}/3</div>
             <div className="text-[10px] text-slate-400">Knockout 🃏</div>
+            {koJokersLeft === 0 && <div className="text-[9px] text-red-400 mt-0.5">All used!</div>}
           </div>
         </div>
       </div>

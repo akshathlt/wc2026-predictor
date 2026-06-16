@@ -211,20 +211,23 @@ export default function Bids() {
     const byMatchNum = Object.fromEntries((bidData || []).map(b => [b.match_num, b]))
     setBids(byMatchNum)
 
-    // Calculate running balance
+    // Calculate running balance correctly:
+    // Start = 2500, each bet: if settled+won → +amount (profit, stake back), if settled+lost → -amount, if open → -amount (reserved)
     let bal = STARTING_BALANCE
     for (const bid of (bidData || [])) {
       const match = groupMatches.find(m => m.matchNum === bid.match_num)
-      if (!match) continue
-      const hasResult = match.homeScore != null && match.awayScore != null
+      if (!match) { bal -= bid.amount; continue } // open bet with no match data — reserve
       const isSettled = match.settled && match.homeScore != null && match.awayScore != null
       if (!isSettled) {
-        bal -= bid.amount // open bet, money reserved
+        bal -= bid.amount // open bet — money reserved
       } else {
         const actual = match.homeScore > match.awayScore ? match.home
           : match.awayScore > match.homeScore ? match.away : 'Draw'
-        if (bid.pick === actual) bal += bid.amount // win: stake returned + profit
-        // loss: already removed from starting balance
+        if (bid.pick === actual) {
+          bal += bid.amount // won: get stake back + profit (net +amount)
+        } else {
+          bal -= bid.amount // lost: deduct stake
+        }
       }
     }
     setBalance(bal)
