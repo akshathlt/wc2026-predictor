@@ -4,112 +4,71 @@ on:
   schedule:
     # Send at 08:00 UTC daily = 10:00 AM Germany (CEST)
     - cron: '0 8 * * *'
-  workflow_dispatch: # Allow manual trigger anytime
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to commit leaderboard.json
 
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch top 5 from Supabase and post to Teams via Power Automate
+      - uses: actions/checkout@v4
+
+      - name: Fetch top 10 and write leaderboard.json
         env:
           SUPABASE_URL: https://neqdmjxbjwxmoiaxzkiy.supabase.co
           SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          POWER_AUTOMATE_URL: ${{ secrets.POWER_AUTOMATE_URL }}
           APP_URL: https://wc2026-predictor-dmz.pages.dev
         run: |
           node << 'EOF'
-          const SUPABASE_URL       = process.env.SUPABASE_URL
-          const SUPABASE_KEY       = process.env.SUPABASE_KEY
-          const POWER_AUTOMATE_URL = process.env.POWER_AUTOMATE_URL
-          const APP_URL            = process.env.APP_URL
-          const medals = ['🥇','🥈','🥉','4️⃣','5️⃣']
+          const fs   = require('fs')
+          const URL  = process.env.SUPABASE_URL
+          const KEY  = process.env.SUPABASE_KEY
+          const APP  = process.env.APP_URL
 
           async function main() {
-            // 1. Fetch top 5 players from Supabase
+            // Fetch top 10 players
             const r = await fetch(
-              `${SUPABASE_URL}/rest/v1/players?select=display_name,total_pts,stage_pts,special_pts&order=total_pts.desc&limit=5`,
-              { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+              `${URL}/rest/v1/players?select=display_name,total_pts,stage_pts,special_pts&order=total_pts.desc&limit=10`,
+              { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` } }
             )
             const players = await r.json()
-            if (!Array.isArray(players) || players.length === 0) {
-              console.log('No players — skipping'); return
+            if (!Array.isArray(players)) { console.log('No data'); return }
+
+            const dayNum  = Math.max(1, Math.floor((Date.now() - new Date('2026-06-11T19:00:00Z').getTime()) / 86400000) + 1)
+            const today   = new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
+            const gap     = players.length > 1 ? (players[0]?.total_pts||0) - (players[1]?.total_pts||0) : 0
+            const medals  = ['🥇','🥈','🥉','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟']
+
+            const data = {
+              generated_at: new Date().toISOString(),
+              day: dayNum,
+              date: today,
+              total_players: players.length,
+              gap_1st_2nd: gap,
+              app_url: APP,
+              top10: players.map((p, i) => ({
+                rank: i + 1,
+                medal: medals[i],
+                name: p.display_name,
+                total_pts: p.total_pts || 0,
+                match_pts: p.stage_pts || 0,
+                special_pts: p.special_pts || 0
+              }))
             }
 
-            // 2. Calculate day number
-            const dayNum = Math.max(1, Math.floor((Date.now() - new Date('2026-06-11T19:00:00Z').getTime()) / 86400000) + 1)
-            const dateStr = new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
-            const gap = players.length > 1 ? (players[0].total_pts||0) - (players[1].total_pts||0) : 0
-
-            // 3. Build top 5 rows as text for the card
-            const top5Text = players.map((p, i) =>
-              `${medals[i]} ${p.display_name} — ${p.total_pts || 0} pts`
-            ).join('\n\n')
-
-            // 4. Build Adaptive Card
-            const card = {
-              type: 'message',
-              attachments: [{
-                contentType: 'application/vnd.microsoft.card.adaptive',
-                content: {
-                  '$schema': 'http://adaptivecards.io/schemas/adaptive-card.json',
-                  type: 'AdaptiveCard',
-                  version: '1.4',
-                  body: [
-                    {
-                      type: 'ColumnSet',
-                      columns: [
-                        { type: 'Column', width: 'auto', items: [{ type: 'TextBlock', text: '⚽', size: 'ExtraLarge' }] },
-                        { type: 'Column', width: 'stretch', items: [
-                          { type: 'TextBlock', text: `⚡ Day ${dayNum} Leaderboard`, weight: 'Bolder', size: 'Large', color: 'Warning' },
-                          { type: 'TextBlock', text: dateStr, size: 'Small', spacing: 'None', isSubtle: true }
-                        ]}
-                      ]
-                    },
-                    { type: 'TextBlock', text: '🏆 Top 5 Leaderboard', weight: 'Bolder', size: 'Medium', spacing: 'Medium' },
-                    {
-                      type: 'FactSet',
-                      facts: players.map((p, i) => ({
-                        title: medals[i],
-                        value: `**${p.display_name}** — ${p.total_pts || 0} pts`
-                      }))
-                    },
-                    { type: 'TextBlock', text: `📊 Gap 1st→2nd: **${gap} pts** · 👥 Players: **${players.length}**`, size: 'Small', color: 'Accent', spacing: 'Small' },
-                    { type: 'TextBlock', text: `[🏆 View Full Leaderboard →](${APP_URL}/leaderboard)`, color: 'Warning', spacing: 'Small' },
-                    { type: 'TextBlock', text: '---', separator: true },
-                    { type: 'TextBlock', text: '🎯 Points System', weight: 'Bolder', spacing: 'Small' },
-                    {
-                      type: 'FactSet',
-                      facts: [
-                        { title: 'Correct winner/draw', value: '2 pts' },
-                        { title: 'Correct goal diff',   value: '3 pts' },
-                        { title: 'Exact scoreline',     value: '5 pts' },
-                        { title: '🃏 Joker card',        value: '×2 all pts' },
-                        { title: '🟣 Knockout draw',    value: '+5 pts' },
-                        { title: '🥅 Correct penalties','value': '+10 pts' }
-                      ]
-                    },
-                    { type: 'TextBlock', text: '⏰ Each match locks **1 hour before kick-off** — predict now!', wrap: true, color: 'Warning', size: 'Small', spacing: 'Small' }
-                  ],
-                  actions: [
-                    { type: 'Action.OpenUrl', title: '⚽ Predict Matches', url: `${APP_URL}/matches` },
-                    { type: 'Action.OpenUrl', title: '🏆 Open App', url: APP_URL }
-                  ],
-                  msteams: { width: 'Full' }
-                }
-              }]
-            }
-
-            // 5. Post to Teams via Power Automate flow URL
-            const res = await fetch(POWER_AUTOMATE_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(card)
-            })
-            const body = await res.text()
-            console.log(`Power Automate response: ${res.status} ${body}`)
-            if (!res.ok) throw new Error(`Failed: ${res.status} ${body}`)
-            console.log(`✅ Day ${dayNum} leaderboard sent! Top: ${players[0]?.display_name} ${players[0]?.total_pts} pts`)
+            fs.writeFileSync('leaderboard.json', JSON.stringify(data, null, 2))
+            console.log(`✅ leaderboard.json written — Day ${dayNum}, ${players.length} players, leader: ${players[0]?.display_name} ${players[0]?.total_pts}pts`)
           }
 
-          main().catch(e => { console.error('ERROR:', e.message); process.exit(1) })
+          main().catch(e => { console.error(e.message); process.exit(1) })
           EOF
+
+      - name: Commit leaderboard.json
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add leaderboard.json
+          git diff --staged --quiet || git commit -m "chore: update leaderboard.json [skip ci]"
+          git push
