@@ -124,18 +124,53 @@ function MatchResultForm({ match, onSaved }) {
   )
 }
 
+function SpecialQuestionGrader({ q, onSaved }) {
+  const [answer, setAnswer] = useState(q.correct_answer || '')
+  const [saving, setSaving] = useState(false)
+
+  const save = async () => {
+    setSaving(true)
+    await supabase.from('special_questions').update({ correct_answer: answer.trim() }).eq('id', q.id)
+    onSaved(q.id, answer.trim())
+    setSaving(false)
+  }
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 flex-wrap">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium">{q.category} — {q.question}</p>
+        <p className="text-xs text-slate-500 mt-0.5">{q.points} pts · type: {q.answer_type}</p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <input value={answer} onChange={e => setAnswer(e.target.value)}
+          placeholder="Correct answer…"
+          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-green-500 w-44" />
+        <button onClick={save} disabled={saving || !answer.trim()}
+          className="btn-primary !py-1.5 !px-4 text-xs disabled:opacity-50">
+          {saving ? '…' : q.correct_answer ? '✓ Update' : 'Save'}
+        </button>
+        {q.correct_answer && (
+          <span className="text-green-400 text-xs font-semibold whitespace-nowrap">✓ Set: {q.correct_answer}</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function Admin() {
   const { player } = useAuth()
-  const [matches,   setMatches]   = useState([])
-  const [players,   setPlayers]   = useState([])
-  const [msg,       setMsg]       = useState('')
-  const [tab,       setTab]       = useState('matches')
-  const [report,    setReport]    = useState(null)
-  const [syncLogs,  setSyncLogs]  = useState([])
+  const [matches,    setMatches]    = useState([])
+  const [players,    setPlayers]    = useState([])
+  const [specialQs,  setSpecialQs]  = useState([])
+  const [msg,        setMsg]        = useState('')
+  const [tab,        setTab]        = useState('matches')
+  const [report,     setReport]     = useState(null)
+  const [syncLogs,   setSyncLogs]   = useState([])
   const [loadingReport, setLoadingReport] = useState(false)
 
   const TABS = [
     { key: 'matches', label: 'Matches & Results', icon: '⚽' },
+    { key: 'special', label: 'Special Answers',   icon: '⭐' },
     { key: 'players', label: `Players (${players.length})`, icon: '👥' },
     { key: 'reports', label: 'Reports',           icon: '📊' },
     { key: 'synclog', label: 'Sync Log',           icon: '🕐' },
@@ -151,6 +186,8 @@ export default function Admin() {
     if (!player?.is_admin) return
     reloadMatches()
     reloadPlayers()
+    supabase.from('special_questions').select('*').order('sort_order')
+      .then(({ data }) => data && setSpecialQs(data))
   }, [player])
 
   // Load sync log when that tab is opened
@@ -293,13 +330,33 @@ export default function Admin() {
         await supabase.from('match_predictions').update({ total_pts: pts, penalty_pts: penPts }).eq('id', pred.id)
       }
     }
+    // Sum match pts per player
     const { data: allPreds } = await supabase.from('match_predictions').select('player_id, total_pts, penalty_pts')
-    const totals = {}
+    const stageTotals = {}
     for (const p of allPreds || []) {
-      totals[p.player_id] = (totals[p.player_id] || 0) + (p.total_pts || 0) + (p.penalty_pts || 0)
+      stageTotals[p.player_id] = (stageTotals[p.player_id] || 0) + (p.total_pts || 0) + (p.penalty_pts || 0)
     }
-    for (const [pid, pts] of Object.entries(totals)) {
-      await supabase.from('players').update({ stage_pts: pts, total_pts: pts }).eq('id', pid)
+
+    // Score special answers — compare against correct_answer set on the question
+    const { data: questions }       = await supabase.from('special_questions').select('id, points, correct_answer')
+    const { data: allSpecialAns }   = await supabase.from('special_answers').select('id, player_id, question_id, answer, joker_used')
+    const specialTotals = {}
+    for (const ans of allSpecialAns || []) {
+      const q = (questions || []).find(q => q.id === ans.question_id)
+      if (!q || !q.correct_answer) continue  // question not yet graded
+      const correct = ans.answer?.trim().toLowerCase() === q.correct_answer.trim().toLowerCase()
+      let pts = correct ? q.points : 0
+      if (ans.joker_used) pts *= 2
+      await supabase.from('special_answers').update({ correct, points_earned: pts }).eq('id', ans.id)
+      specialTotals[ans.player_id] = (specialTotals[ans.player_id] || 0) + pts
+    }
+
+    // Write both stage_pts and special_pts, then total = sum
+    const allPlayerIds = new Set([...Object.keys(stageTotals), ...Object.keys(specialTotals)])
+    for (const pid of allPlayerIds) {
+      const stage   = stageTotals[pid]   || 0
+      const special = specialTotals[pid] || 0
+      await supabase.from('players').update({ stage_pts: stage, special_pts: special, total_pts: stage + special }).eq('id', pid)
     }
     if (!silent) setMsg('Points recalculated ✅')
     else setMsg(prev => prev.replace('recalculating points…', 'points recalculated ✅'))
@@ -360,6 +417,24 @@ export default function Admin() {
               ? <p className="text-slate-500 text-sm text-center py-6">No matches loaded yet.</p>
               : matches.map(m => <MatchResultForm key={m.id} match={m} onSaved={reloadMatches} />)
             }
+          </div>
+        </div>
+      )}
+
+      {/* ── Special Questions — grade correct answers ── */}
+      {tab === 'special' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-slate-400 text-sm">Enter the correct answer for each question. Click "Save". Then hit <b>Recalculate Points</b> on the Matches tab — special pts will update for everyone.</p>
+          </div>
+          {specialQs.length === 0 && (
+            <div className="card p-8 text-center text-slate-500">No special questions in DB yet — run the SQL schema first.</div>
+          )}
+          <div className="card divide-y divide-slate-800">
+            {specialQs.map(q => (
+              <SpecialQuestionGrader key={q.id} q={q}
+                onSaved={(id, ans) => setSpecialQs(prev => prev.map(x => x.id === id ? { ...x, correct_answer: ans } : x))} />
+            ))}
           </div>
         </div>
       )}

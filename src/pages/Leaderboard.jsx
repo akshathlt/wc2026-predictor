@@ -183,8 +183,8 @@ function PlayerRow({ p, rank, isMe }) {
             {isMe && <span className="text-green-400 text-xs ml-1">(you)</span>}
           </p>
           <div className="flex gap-4 text-xs text-slate-500 mt-0.5">
-            <span>Matches: <b className="text-slate-300">{p.stage_pts || 0}</b></span>
-            <span>Special: <b className="text-slate-300">{p.special_pts || 0}</b></span>
+            <span>⚽ Match pts: <b className="text-slate-300">{p.stage_pts || 0}</b></span>
+            <span>⭐ Special pts: <b className="text-slate-300">{p.special_pts || 0}</b></span>
           </div>
         </div>
         <div className="w-20 hidden sm:block">

@@ -114,6 +114,7 @@ create table if not exists public.special_questions (
   answer_type text not null,  -- 'text', 'team', 'player', 'yesno', 'host'
   points      integer not null,
   options     jsonb,          -- array of choices for dropdowns
+  correct_answer text,        -- set by admin after tournament; used for scoring
   sort_order  integer default 0
 );
 
