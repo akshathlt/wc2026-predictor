@@ -47,11 +47,9 @@ function TeamRow({ name, code, placeholder, score, penScore, isWinner, isPen }) 
   )
 }
 
-function MatchBox({ match, mirrored }) {
-  const flip = mirrored ? { transform: 'scaleX(-1)' } : {}
-
+function MatchBox({ match }) {
   if (!match) return (
-    <div className="w-[130px] rounded border border-slate-700 bg-slate-800/50 overflow-hidden" style={flip}>
+    <div className="w-[130px] rounded border border-slate-700 bg-slate-800/50 overflow-hidden">
       <div className="border-b border-slate-700 px-2 py-0.5 text-[10px] text-slate-600 text-center">—</div>
       <div className="px-2 py-1.5"><TBD /></div>
       <div className="border-t border-slate-700 px-2 py-1.5"><TBD /></div>
@@ -68,90 +66,57 @@ function MatchBox({ match, mirrored }) {
   const timeStr = date ? new Date(date).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) : null
 
   return (
-    <div className="w-[130px] rounded border border-slate-700 bg-slate-900 overflow-hidden" style={flip}>
-      {/* Header: date + match number */}
+    <div className="w-[130px] rounded border border-slate-700 bg-slate-900 overflow-hidden">
       <div className="flex items-center justify-between px-2 py-0.5 bg-slate-800 border-b border-slate-700">
         <span className="text-[9px] text-slate-500">{dateStr ? `${dateStr} ${timeStr}` : '—'}</span>
         {matchNum && <span className="text-[9px] text-blue-500">M{matchNum}</span>}
       </div>
-      {/* Team A */}
       <TeamRow name={teamA} code={codeA} placeholder={placeholderA} score={scoreA} penScore={isPenA ? penA : isPenB ? penA : null}
         isWinner={winA} isPen={isPenA} />
       <div className="border-t border-slate-800" />
-      {/* Team B */}
       <TeamRow name={teamB} code={codeB} placeholder={placeholderB} score={scoreB} penScore={isPenB ? penB : isPenA ? penB : null}
         isWinner={winB} isPen={isPenB} />
     </div>
   )
 }
 
-// Connector: two matches on left → one on right
-function BracketConnector({ top, bottom }) {
+// Left tree: match box on right, children expand leftward
+function BracketTree({ node, depth }) {
+  if (!node) return null
+  if (!node.left && !node.right) return <MatchBox match={node.match} />
+
   return (
     <div className="flex items-stretch" style={{ gap: 0 }}>
-      {/* Two match boxes stacked */}
-      <div className="flex flex-col" style={{ gap: 6 }}>
-        <MatchBox match={top} />
-        <MatchBox match={bottom} />
+      <div className="flex flex-col" style={{ gap: depth >= 3 ? 24 : depth >= 2 ? 16 : 6 }}>
+        <BracketTree node={node.left} depth={depth - 1} />
+        <BracketTree node={node.right} depth={depth - 1} />
       </div>
-
-      {/* Right bracket lines */}
       <div className="flex flex-col flex-shrink-0" style={{ width: 14 }}>
-        {/* Top arm: right+bottom border */}
-        <div style={{
-          flex: 1,
-          borderRight: '1.5px solid #475569',
-          borderBottom: '1.5px solid #475569',
-        }} />
-        {/* Bottom arm: right+top border */}
-        <div style={{
-          flex: 1,
-          borderRight: '1.5px solid #475569',
-          borderTop: '1.5px solid #475569',
-        }} />
+        <div style={{ flex: 1, borderRight: '1.5px solid #475569', borderBottom: '1.5px solid #475569' }} />
+        <div style={{ flex: 1, borderRight: '1.5px solid #475569', borderTop: '1.5px solid #475569' }} />
       </div>
+      <div style={{ width: 8, alignSelf: 'center', height: 1.5, background: '#475569', flexShrink: 0 }} />
+      <div className="self-center"><MatchBox match={node.match} /></div>
     </div>
   )
 }
 
-// A round "segment": pair of pairs → pair of R16 → QF etc.
-// tree: { match, left: { match, left, right }, right: { match, left, right } }
-function BracketTree({ node, depth, mirrored }) {
+// Right tree: match box on LEFT, children expand rightward (mirror layout of left tree)
+function BracketTreeRight({ node, depth }) {
   if (!node) return null
-
-  // Leaf: just show match box
-  if (!node.left && !node.right) {
-    return <MatchBox match={node.match} mirrored={mirrored} />
-  }
+  if (!node.left && !node.right) return <MatchBox match={node.match} />
 
   return (
     <div className="flex items-stretch" style={{ gap: 0 }}>
-      {/* Left subtree (two children stacked) */}
-      <div className="flex flex-col" style={{ gap: depth >= 3 ? 24 : depth >= 2 ? 16 : 6 }}>
-        <BracketTree node={node.left} depth={depth - 1} mirrored={mirrored} />
-        <BracketTree node={node.right} depth={depth - 1} mirrored={mirrored} />
-      </div>
-
-      {/* Bracket connector lines */}
-      <div className="flex flex-col flex-shrink-0" style={{ width: 14 }}>
-        <div style={{
-          flex: 1,
-          borderRight: '1.5px solid #475569',
-          borderBottom: '1.5px solid #475569',
-        }} />
-        <div style={{
-          flex: 1,
-          borderRight: '1.5px solid #475569',
-          borderTop: '1.5px solid #475569',
-        }} />
-      </div>
-
-      {/* Horizontal connector */}
+      <div className="self-center"><MatchBox match={node.match} /></div>
       <div style={{ width: 8, alignSelf: 'center', height: 1.5, background: '#475569', flexShrink: 0 }} />
-
-      {/* This round's match box */}
-      <div className="self-center">
-        <MatchBox match={node.match} mirrored={mirrored} />
+      <div className="flex flex-col flex-shrink-0" style={{ width: 14 }}>
+        <div style={{ flex: 1, borderLeft: '1.5px solid #475569', borderBottom: '1.5px solid #475569' }} />
+        <div style={{ flex: 1, borderLeft: '1.5px solid #475569', borderTop: '1.5px solid #475569' }} />
+      </div>
+      <div className="flex flex-col" style={{ gap: depth >= 3 ? 24 : depth >= 2 ? 16 : 6 }}>
+        <BracketTreeRight node={node.left} depth={depth - 1} />
+        <BracketTreeRight node={node.right} depth={depth - 1} />
       </div>
     </div>
   )
@@ -280,10 +245,8 @@ export default function KnockoutBracket() {
         {/* Connector Final ← right */}
         <div style={{ width: 10, height: 1.5, background: '#475569', flexShrink: 0 }} />
 
-        {/* Right half (mirror: expands right→left into Final) */}
-        <div style={{ transform: 'scaleX(-1)' }}>
-          <BracketTree node={rightTree} depth={4} mirrored />
-        </div>
+        {/* Right half (expands left→right away from Final) */}
+        <BracketTreeRight node={rightTree} depth={4} />
 
       </div>
 
