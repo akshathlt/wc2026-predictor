@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { fetchWithFallback } from '../lib/fetchWithFallback'
 import { useAuth } from '../hooks/useAuth'
 import { getUserTimezone, formatMatchTime, formatMatchDate } from '../lib/timezone'
+import KnockoutBracket from '../components/KnockoutBracket'
 
 const MATCHES_URL = 'https://api.fifa.com/api/v3/calendar/matches?language=en&count=200&idSeason=285023'
 const STANDINGS_URL = 'https://api.fifa.com/api/v3/calendar/17/285023/289273/standing?language=en&count=200'
@@ -190,6 +191,7 @@ export default function Fixtures() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [view, setView] = useState('group')
+  const [knockoutView, setKnockoutView] = useState('bracket')
 
   useEffect(() => {
     Promise.all([
@@ -310,9 +312,24 @@ export default function Fixtures() {
         <DayGroup key={day} day={day} matches={ms} standings={standings} tz={tz} />
       ))}
 
-      {view === 'knockout' && stageOrder.filter(s => byStage[s]).map(s => (
-        <KnockoutSection key={s} title={s === 'Final' ? '🏆 Final' : s === 'Play-off for third place' ? '🥉 Third Place Play-off' : s} matches={byStage[s]} tz={tz} />
-      ))}
+      {view === 'knockout' && (
+        <>
+          <div className="flex gap-2 mb-4">
+            <button onClick={() => setKnockoutView('bracket')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${knockoutView === 'bracket' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+              🏆 Bracket
+            </button>
+            <button onClick={() => setKnockoutView('list')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${knockoutView === 'list' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+              📋 List
+            </button>
+          </div>
+          {knockoutView === 'bracket' && <KnockoutBracket />}
+          {knockoutView === 'list' && stageOrder.filter(s => byStage[s]).map(s => (
+            <KnockoutSection key={s} title={s === 'Final' ? '🏆 Final' : s === 'Play-off for third place' ? '🥉 Third Place Play-off' : s} matches={byStage[s]} tz={tz} />
+          ))}
+        </>
+      )}
     </div>
   )
 }

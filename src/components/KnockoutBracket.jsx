@@ -16,10 +16,11 @@ function TBD() {
   )
 }
 
-function TeamRow({ name, code, score, penScore, isWinner, isPen }) {
+function TeamRow({ name, code, placeholder, score, penScore, isWinner, isPen }) {
   const [flagErr, setFlagErr] = useState(false)
   const hasScore = score != null
   const hasPen = penScore != null
+  const display = name || placeholder
 
   return (
     <div className={`flex items-center justify-between px-2 py-1.5 gap-2
@@ -30,9 +31,9 @@ function TeamRow({ name, code, score, penScore, isWinner, isPen }) {
               className="w-5 h-3.5 object-cover rounded-sm flex-shrink-0" alt={name} />
           : name && code && <span className="w-5 h-3.5 bg-slate-700 rounded-sm flex-shrink-0 text-[8px] flex items-center justify-center text-slate-400">{code?.slice(0,2)}</span>
         }
-        {name
-          ? <span className={`text-xs font-medium truncate max-w-[70px] ${isWinner ? 'text-green-300' : 'text-slate-200'}`}>
-              {name}{isPen ? ' (p)' : ''}
+        {display
+          ? <span className={`text-xs font-medium truncate max-w-[70px] ${isWinner ? 'text-green-300' : name ? 'text-slate-200' : 'text-slate-500'}`}>
+              {display}{isPen ? ' (p)' : ''}
             </span>
           : <TBD />
         }
@@ -46,16 +47,18 @@ function TeamRow({ name, code, score, penScore, isWinner, isPen }) {
   )
 }
 
-function MatchBox({ match }) {
+function MatchBox({ match, mirrored }) {
+  const flip = mirrored ? { transform: 'scaleX(-1)' } : {}
+
   if (!match) return (
-    <div className="w-[130px] rounded border border-slate-700 bg-slate-800/50 overflow-hidden">
+    <div className="w-[130px] rounded border border-slate-700 bg-slate-800/50 overflow-hidden" style={flip}>
       <div className="border-b border-slate-700 px-2 py-0.5 text-[10px] text-slate-600 text-center">—</div>
       <div className="px-2 py-1.5"><TBD /></div>
       <div className="border-t border-slate-700 px-2 py-1.5"><TBD /></div>
     </div>
   )
 
-  const { teamA, codeA, teamB, codeB, scoreA, scoreB, penA, penB, matchNum, date } = match
+  const { teamA, codeA, teamB, codeB, scoreA, scoreB, penA, penB, matchNum, date, placeholderA, placeholderB } = match
   const hasScore = scoreA != null && scoreB != null
   const winA = hasScore && (scoreA > scoreB || (scoreA === scoreB && penA != null && penA > penB))
   const winB = hasScore && (scoreB > scoreA || (scoreA === scoreB && penB != null && penB > penA))
@@ -65,18 +68,18 @@ function MatchBox({ match }) {
   const timeStr = date ? new Date(date).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) : null
 
   return (
-    <div className="w-[130px] rounded border border-slate-700 bg-slate-900 overflow-hidden">
+    <div className="w-[130px] rounded border border-slate-700 bg-slate-900 overflow-hidden" style={flip}>
       {/* Header: date + match number */}
       <div className="flex items-center justify-between px-2 py-0.5 bg-slate-800 border-b border-slate-700">
         <span className="text-[9px] text-slate-500">{dateStr ? `${dateStr} ${timeStr}` : '—'}</span>
         {matchNum && <span className="text-[9px] text-blue-500">M{matchNum}</span>}
       </div>
       {/* Team A */}
-      <TeamRow name={teamA} code={codeA} score={scoreA} penScore={isPenA ? penA : isPenB ? penA : null}
+      <TeamRow name={teamA} code={codeA} placeholder={placeholderA} score={scoreA} penScore={isPenA ? penA : isPenB ? penA : null}
         isWinner={winA} isPen={isPenA} />
       <div className="border-t border-slate-800" />
       {/* Team B */}
-      <TeamRow name={teamB} code={codeB} score={scoreB} penScore={isPenB ? penB : isPenA ? penB : null}
+      <TeamRow name={teamB} code={codeB} placeholder={placeholderB} score={scoreB} penScore={isPenB ? penB : isPenA ? penB : null}
         isWinner={winB} isPen={isPenB} />
     </div>
   )
@@ -113,20 +116,20 @@ function BracketConnector({ top, bottom }) {
 
 // A round "segment": pair of pairs → pair of R16 → QF etc.
 // tree: { match, left: { match, left, right }, right: { match, left, right } }
-function BracketTree({ node, depth }) {
+function BracketTree({ node, depth, mirrored }) {
   if (!node) return null
 
   // Leaf: just show match box
   if (!node.left && !node.right) {
-    return <MatchBox match={node.match} />
+    return <MatchBox match={node.match} mirrored={mirrored} />
   }
 
   return (
     <div className="flex items-stretch" style={{ gap: 0 }}>
       {/* Left subtree (two children stacked) */}
       <div className="flex flex-col" style={{ gap: depth >= 3 ? 24 : depth >= 2 ? 16 : 6 }}>
-        <BracketTree node={node.left} depth={depth - 1} />
-        <BracketTree node={node.right} depth={depth - 1} />
+        <BracketTree node={node.left} depth={depth - 1} mirrored={mirrored} />
+        <BracketTree node={node.right} depth={depth - 1} mirrored={mirrored} />
       </div>
 
       {/* Bracket connector lines */}
@@ -148,7 +151,7 @@ function BracketTree({ node, depth }) {
 
       {/* This round's match box */}
       <div className="self-center">
-        <MatchBox match={node.match} />
+        <MatchBox match={node.match} mirrored={mirrored} />
       </div>
     </div>
   )
@@ -279,7 +282,7 @@ export default function KnockoutBracket() {
 
         {/* Right half (mirror: expands right→left into Final) */}
         <div style={{ transform: 'scaleX(-1)' }}>
-          <BracketTree node={rightTree} depth={4} />
+          <BracketTree node={rightTree} depth={4} mirrored />
         </div>
 
       </div>
