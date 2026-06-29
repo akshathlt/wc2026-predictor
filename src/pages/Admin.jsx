@@ -415,6 +415,8 @@ export default function Admin() {
 
   const recalcPoints = async (silent = false) => {
     if (!silent) setMsg('Recalculating points…')
+
+    // 1. Recalc match prediction pts
     const { data: finishedMatches } = await supabase.from('matches').select('*').not('home_goals', 'is', null)
     for (const match of finishedMatches || []) {
       const { data: preds } = await supabase.from('match_predictions').select('*').eq('match_id', match.id)
@@ -434,34 +436,53 @@ export default function Admin() {
         await supabase.from('match_predictions').update({ total_pts: pts, penalty_pts: penPts }).eq('id', pred.id)
       }
     }
-    // Sum match pts per player
+
+    // 2. Sum match pts per player
     const { data: allPreds } = await supabase.from('match_predictions').select('player_id, total_pts, penalty_pts')
     const stageTotals = {}
     for (const p of allPreds || []) {
       stageTotals[p.player_id] = (stageTotals[p.player_id] || 0) + (p.total_pts || 0) + (p.penalty_pts || 0)
     }
 
-    // Score special answers — compare against correct_answer set on the question
-    const { data: questions }       = await supabase.from('special_questions').select('id, points, correct_answer')
-    const { data: allSpecialAns }   = await supabase.from('special_answers').select('id, player_id, question_id, answer, joker_used')
-    const specialTotals = {}
+    // 3. Score special answers
+    const { data: questions }     = await supabase.from('special_questions').select('id, points, correct_answer')
+    const { data: allSpecialAns } = await supabase.from('special_answers').select('id, player_id, question_id, answer, joker_used')
+    const specialQTotals = {}
     for (const ans of allSpecialAns || []) {
       const q = (questions || []).find(q => q.id === ans.question_id)
-      if (!q || !q.correct_answer) continue  // question not yet graded
+      if (!q || !q.correct_answer) continue
       const correct = ans.answer?.trim().toLowerCase() === q.correct_answer.trim().toLowerCase()
       let pts = correct ? q.points : 0
       if (ans.joker_used) pts *= 2
       await supabase.from('special_answers').update({ correct, points_earned: pts }).eq('id', ans.id)
-      specialTotals[ans.player_id] = (specialTotals[ans.player_id] || 0) + pts
+      specialQTotals[ans.player_id] = (specialQTotals[ans.player_id] || 0) + pts
     }
 
-    // Write both stage_pts and special_pts, then total = sum
-    const allPlayerIds = new Set([...Object.keys(stageTotals), ...Object.keys(specialTotals)])
+    // 4. Sum group ranking pts per player (already scored, just re-sum)
+    const { data: allGroupPreds } = await supabase.from('group_predictions').select('player_id, points_earned')
+    const groupTotals = {}
+    for (const r of allGroupPreds || []) {
+      groupTotals[r.player_id] = (groupTotals[r.player_id] || 0) + (r.points_earned || 0)
+    }
+
+    // 5. Sum third place pts per player (already scored, just re-sum)
+    const { data: allThirdPreds } = await supabase.from('third_place_picks').select('player_id, points_earned')
+    const thirdTotals = {}
+    for (const r of allThirdPreds || []) {
+      thirdTotals[r.player_id] = (thirdTotals[r.player_id] || 0) + (r.points_earned || 0)
+    }
+
+    // 6. Write final totals — stage_pts = match pts, special_pts = group + third + special Q
+    const allPlayerIds = new Set([
+      ...Object.keys(stageTotals), ...Object.keys(specialQTotals),
+      ...Object.keys(groupTotals), ...Object.keys(thirdTotals)
+    ])
     for (const pid of allPlayerIds) {
       const stage   = stageTotals[pid]   || 0
-      const special = specialTotals[pid] || 0
+      const special = (specialQTotals[pid] || 0) + (groupTotals[pid] || 0) + (thirdTotals[pid] || 0)
       await supabase.from('players').update({ stage_pts: stage, special_pts: special, total_pts: stage + special }).eq('id', pid)
     }
+
     if (!silent) setMsg('Points recalculated ✅')
     else setMsg(prev => prev.replace('recalculating points…', 'points recalculated ✅'))
     reloadPlayers()
