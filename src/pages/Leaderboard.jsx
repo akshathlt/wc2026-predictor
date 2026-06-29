@@ -82,7 +82,7 @@ function PredictionBreakdown({ playerId }) {
     Promise.all([
       supabase.from('match_predictions').select('*').eq('player_id', playerId),
       supabase.from('matches').select('*').not('home_goals', 'is', null).order('match_num'),
-      supabase.from('group_predictions').select('*').eq('player_id', playerId).gt('points_earned', -1),
+      supabase.from('group_predictions').select('*').eq('player_id', playerId).not('actual_position', 'is', null),
       supabase.from('third_place_picks').select('*').eq('player_id', playerId),
       supabase.from('special_answers').select('*, special_questions(question, points)').eq('player_id', playerId),
     ]).then(([{ data: preds }, { data: matches }, { data: groupPreds }, { data: thirdPicks }, { data: specialAns }]) => {
