@@ -210,44 +210,46 @@ export default function KnockoutBracket() {
 
   return (
     <div className="overflow-x-auto pb-4 mt-2">
-      {/* Column headers */}
-      <div className="flex items-center justify-between mb-3" style={{ minWidth: 1080 }}>
-        {leftLabels.map(l => (
-          <span key={l} className="text-xs font-bold text-slate-400 flex-1 text-center">{l}</span>
-        ))}
-        <span className="text-xs font-bold text-yellow-400 w-[140px] text-center">Final</span>
-        {rightLabels.map(l => (
-          <span key={l} className="text-xs font-bold text-slate-400 flex-1 text-center">{l}</span>
-        ))}
-      </div>
-
-      {/* Bracket */}
-      <div className="flex items-center justify-center gap-1" style={{ minWidth: 1080 }}>
-
-        {/* Left half (expands left→right into Final) */}
-        <BracketTree node={leftTree} depth={4} />
-
-        {/* Connector left → Final */}
-        <div style={{ width: 10, height: 1.5, background: '#475569', flexShrink: 0 }} />
-
-        {/* Final + 3rd place */}
-        <div className="flex flex-col items-center gap-6 flex-shrink-0">
-          <div>
-            <div className="text-[10px] font-bold text-yellow-400 text-center mb-1">🏆 Final</div>
-            <MatchBox match={m(104)} />
-          </div>
-          <div>
-            <div className="text-[10px] font-bold text-slate-400 text-center mb-1">🥉 3rd Place</div>
-            <MatchBox match={m(103)} />
-          </div>
+      <div style={{ minWidth: 'max-content', margin: '0 auto' }}>
+        {/* Column headers */}
+        <div className="flex items-center justify-between mb-3" style={{ minWidth: 1200 }}>
+          {leftLabels.map(l => (
+            <span key={l} className="text-xs font-bold text-slate-400 flex-1 text-center">{l}</span>
+          ))}
+          <span className="text-xs font-bold text-yellow-400 w-[140px] text-center">Final</span>
+          {rightLabels.map(l => (
+            <span key={l} className="text-xs font-bold text-slate-400 flex-1 text-center">{l}</span>
+          ))}
         </div>
 
-        {/* Connector Final ← right */}
-        <div style={{ width: 10, height: 1.5, background: '#475569', flexShrink: 0 }} />
+        {/* Bracket */}
+        <div className="flex items-center gap-1">
 
-        {/* Right half (expands left→right away from Final) */}
-        <BracketTreeRight node={rightTree} depth={4} />
+          {/* Left half (expands left→right into Final) */}
+          <BracketTree node={leftTree} depth={4} />
 
+          {/* Connector left → Final */}
+          <div style={{ width: 10, height: 1.5, background: '#475569', flexShrink: 0 }} />
+
+          {/* Final + 3rd place */}
+          <div className="flex flex-col items-center gap-6 flex-shrink-0">
+            <div>
+              <div className="text-[10px] font-bold text-yellow-400 text-center mb-1">🏆 Final</div>
+              <MatchBox match={m(104)} />
+            </div>
+            <div>
+              <div className="text-[10px] font-bold text-slate-400 text-center mb-1">🥉 3rd Place</div>
+              <MatchBox match={m(103)} />
+            </div>
+          </div>
+
+          {/* Connector Final ← right */}
+          <div style={{ width: 10, height: 1.5, background: '#475569', flexShrink: 0 }} />
+
+          {/* Right half (expands left→right away from Final) */}
+          <BracketTreeRight node={rightTree} depth={4} />
+
+        </div>
       </div>
 
       {/* Mobile fallback note */}
