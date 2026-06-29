@@ -192,7 +192,7 @@ function MatchCard({ match, prediction, onSave, locked, jokersLeft = 3, koJokers
 
       {/* Knockout draw bonus info for group stage */}
       {knockout && !hasResult && !isLocked && !isDraw && (
-        <p className="text-xs text-purple-400/70 mb-2">⚡ Knockout: Draw prediction = +5 pts bonus · Correct penalty pick = +5 pts</p>
+        <p className="text-xs text-purple-400/70 mb-2">⚡ Knockout: Draw prediction = +5 pts bonus · Correct penalty pick = +10 pts</p>
       )}
 
       {/* Points display if result exists */}
