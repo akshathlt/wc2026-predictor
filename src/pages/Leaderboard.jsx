@@ -82,8 +82,13 @@ function PredictionBreakdown({ playerId }) {
     Promise.all([
       supabase.from('match_predictions').select('*').eq('player_id', playerId),
       supabase.from('matches').select('*').not('home_goals', 'is', null).order('match_num'),
-    ]).then(([{ data: preds }, { data: matches }]) => {
+      supabase.from('group_predictions').select('*').eq('player_id', playerId).gt('points_earned', -1),
+      supabase.from('third_place_picks').select('*').eq('player_id', playerId),
+      supabase.from('special_answers').select('*, special_questions(question, points)').eq('player_id', playerId),
+    ]).then(([{ data: preds }, { data: matches }, { data: groupPreds }, { data: thirdPicks }, { data: specialAns }]) => {
       if (!preds || !matches) { setLoading(false); return }
+
+      // Match rows
       const rows = matches.map(m => {
         const pred = preds.find(p => p.match_id === m.id)
         if (!pred) return null
@@ -100,12 +105,33 @@ function PredictionBreakdown({ playerId }) {
         }
         const jokerBonus = pred.joker_used ? base : 0
         if (pred.joker_used) breakdown.push(`🃏 Joker ×2 (+${base})`)
-        const total = base + jokerBonus
+        // Penalty pts
+        const penPts = pred.penalty_pts || 0
+        if (penPts > 0) breakdown.push(`🥅 Penalty bonus (+${penPts})`)
+        const total = base + jokerBonus + penPts
         return { match: m, pred, base, total, breakdown, joker: pred.joker_used }
       }).filter(Boolean)
 
-      const totalPts = rows.reduce((s, r) => s + r.total, 0)
-      setData({ rows, totalPts })
+      // Group prediction rows — only those with actual_position set
+      const groupRows = (groupPreds || []).filter(g => g.actual_position != null)
+      const groupByGroup = {}
+      groupRows.forEach(g => {
+        if (!groupByGroup[g.group_name]) groupByGroup[g.group_name] = []
+        groupByGroup[g.group_name].push(g)
+      })
+
+      // Third place rows
+      const thirdRows = (thirdPicks || []).filter(t => t.advanced != null)
+
+      // Special answer rows
+      const specialRows = (specialAns || []).filter(a => a.points_earned != null)
+
+      const matchTotal   = rows.reduce((s, r) => s + r.total, 0)
+      const groupTotal   = groupRows.reduce((s, r) => s + (r.points_earned || 0), 0)
+      const thirdTotal   = thirdRows.reduce((s, r) => s + (r.points_earned || 0), 0)
+      const specialTotal = specialRows.reduce((s, r) => s + (r.points_earned || 0), 0)
+
+      setData({ rows, groupByGroup, thirdRows, specialRows, matchTotal, groupTotal, thirdTotal, specialTotal })
       setLoading(false)
     })
   }, [playerId])
@@ -113,11 +139,81 @@ function PredictionBreakdown({ playerId }) {
   if (loading) return <div className="px-4 py-4 text-center text-slate-500 text-sm">Loading predictions…</div>
   if (!data || data.rows.length === 0) return <div className="px-4 py-4 text-center text-slate-500 text-sm">No predictions for finished matches yet.</div>
 
+  const POS_PTS = { 1: 25, 2: 15, 3: 10, 4: 5 }
+  const POS_LABEL = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' }
+
   return (
     <div className="border-t border-slate-800 bg-slate-900/60">
+
+      {/* Group Rankings Section */}
+      {Object.keys(data.groupByGroup).length > 0 && (
+        <>
+          <div className="px-4 py-3 flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">📋 Group Stage Rankings</span>
+            <span className="text-xs text-yellow-400 font-bold">{data.groupTotal} pts</span>
+          </div>
+          <div className="px-3 pb-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+            {Object.keys(data.groupByGroup).sort().map(g => (
+              <div key={g} className="rounded-lg border border-slate-700/40 bg-slate-800/40 p-2">
+                <div className="text-[10px] font-bold text-slate-500 mb-1">Group {g}</div>
+                {data.groupByGroup[g].sort((a,b) => a.predicted_position - b.predicted_position).map(pred => {
+                  const correct = pred.actual_position === pred.predicted_position
+                  return (
+                    <div key={pred.id} className={`flex items-center justify-between text-xs py-0.5 ${correct ? 'text-green-300' : 'text-slate-500'}`}>
+                      <span>{pred.predicted_position}. {pred.team_name}</span>
+                      <span className="font-bold">{correct ? `+${pred.points_earned}` : '0'}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Third Place Section */}
+      {data.thirdRows.length > 0 && (
+        <>
+          <div className="px-4 py-3 flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">🔄 Third Place Picks</span>
+            <span className="text-xs text-yellow-400 font-bold">{data.thirdTotal} pts</span>
+          </div>
+          <div className="px-3 pb-3 flex flex-wrap gap-2">
+            {data.thirdRows.map(t => (
+              <span key={t.id} className={`px-2.5 py-1 rounded-lg text-xs font-medium border
+                ${t.advanced ? 'border-green-600 bg-green-900/30 text-green-300' : 'border-slate-700 bg-slate-800/40 text-slate-500 line-through'}`}>
+                {t.team_name} {t.advanced ? '+5' : '✗'}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Special Answers Section */}
+      {data.specialRows.length > 0 && (
+        <>
+          <div className="px-4 py-3 flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">⭐ Special Questions</span>
+            <span className="text-xs text-yellow-400 font-bold">{data.specialTotal} pts</span>
+          </div>
+          <div className="px-3 pb-3 space-y-1.5">
+            {data.specialRows.map(a => (
+              <div key={a.id} className={`rounded-lg p-2 text-xs flex items-center justify-between
+                ${a.correct ? 'bg-green-900/20 border border-green-800/40' : 'bg-slate-800/40 border border-slate-700/40'}`}>
+                <span className={a.correct ? 'text-green-300' : 'text-slate-500'}>{a.special_questions?.question}</span>
+                <span className={`font-bold ml-2 shrink-0 ${a.correct ? 'text-yellow-400' : 'text-slate-600'}`}>
+                  {a.correct ? `+${a.points_earned}` : '0'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Match Prediction Breakdown */}
       <div className="px-4 py-3 flex items-center justify-between">
         <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Match Prediction Breakdown</span>
-        <span className="text-xs text-yellow-400 font-bold">{data.totalPts} pts total</span>
+        <span className="text-xs text-yellow-400 font-bold">{data.matchTotal} pts total</span>
       </div>
       <div className="px-3 pb-3 space-y-2">
         {data.rows.map(({ match: m, pred, total, breakdown, joker }) => (
@@ -182,9 +278,9 @@ function PlayerRow({ p, rank, isMe }) {
             {p.display_name}
             {isMe && <span className="text-green-400 text-xs ml-1">(you)</span>}
           </p>
-          <div className="flex gap-4 text-xs text-slate-500 mt-0.5">
-            <span>⚽ Match pts: <b className="text-slate-300">{p.stage_pts || 0}</b></span>
-            <span>⭐ Special pts: <b className="text-slate-300">{p.special_pts || 0}</b></span>
+          <div className="flex gap-3 text-xs text-slate-500 mt-0.5">
+            <span>⚽ Match: <b className="text-slate-300">{p.stage_pts || 0}</b></span>
+            <span>⭐ Special: <b className="text-slate-300">{p.special_pts || 0}</b></span>
           </div>
         </div>
         <div className="w-20 hidden sm:block">
