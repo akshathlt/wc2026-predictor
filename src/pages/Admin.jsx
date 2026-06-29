@@ -321,11 +321,9 @@ export default function Admin() {
   const recalcGroupAndThirdPts = async () => {
     setMsg('Fetching final standings from FIFA…')
 
-    // Fetch real group standings from FIFA
     const standingsData = await fetchWithFallback('https://api.fifa.com/api/v3/calendar/17/285023/289273/standing?language=en&count=200')
     if (!standingsData) { setMsg('FIFA standings API unavailable'); return }
 
-    // Build real final positions: { 'Group A': { 'Mexico': 1, 'South Africa': 2, ... } }
     const realStandings = {}
     for (const r of (standingsData.Results || [])) {
       const g = r.Group?.[0]?.Description?.replace('Group ', '')
@@ -336,7 +334,6 @@ export default function Admin() {
       }
     }
 
-    // Fetch real R32 match teams to find which 3rd-place teams advanced
     const matchData = await fetchWithFallback('https://api.fifa.com/api/v3/calendar/matches?language=en&count=200&idSeason=285023')
     const r32Teams = new Set()
     if (matchData) {
@@ -347,70 +344,36 @@ export default function Admin() {
       })
     }
 
-    // 3rd place finishers from each group
     const allThirds = new Set()
     Object.values(realStandings).forEach(group => {
-      const third = Object.entries(group).find(([,pos]) => pos === 3)?.[0]
+      const third = Object.entries(group).find(([, pos]) => pos === 3)?.[0]
       if (third) allThirds.add(third)
     })
-    // Which 3rd place teams advanced = 3rd place finishers that appear in R32
     const advancedThirds = [...allThirds].filter(t => r32Teams.has(t))
 
     const POS_PTS = { 1: 25, 2: 15, 3: 10, 4: 5 }
 
-    // Score all group predictions
+    // Score group prediction rows only
     const { data: allGroupPreds } = await supabase.from('group_predictions').select('*')
-    const groupTotals = {}
+    let groupAwarded = 0
     for (const pred of allGroupPreds || []) {
-      const groupLetter = pred.group_name
-      const actualPos = realStandings[groupLetter]?.[pred.team_name]
-      const correct = actualPos != null && actualPos === pred.predicted_position
-      const pts = correct ? (POS_PTS[actualPos] || 0) : 0
+      const actualPos = realStandings[pred.group_name]?.[pred.team_name]
+      const pts = (actualPos != null && actualPos === pred.predicted_position) ? (POS_PTS[actualPos] || 0) : 0
       await supabase.from('group_predictions').update({ actual_position: actualPos || null, points_earned: pts }).eq('id', pred.id)
-      if (!groupTotals[pred.player_id]) groupTotals[pred.player_id] = 0
-      groupTotals[pred.player_id] += pts
+      groupAwarded += pts
     }
 
-    // Score all third place picks
+    // Score third place pick rows only
     const { data: allThirdPreds } = await supabase.from('third_place_picks').select('*')
-    const thirdTotals = {}
+    let thirdAwarded = 0
     for (const pick of allThirdPreds || []) {
       const advanced = advancedThirds.includes(pick.team_name)
       const pts = advanced ? 5 : 0
       await supabase.from('third_place_picks').update({ advanced, points_earned: pts }).eq('id', pick.id)
-      if (!thirdTotals[pick.player_id]) thirdTotals[pick.player_id] = 0
-      thirdTotals[pick.player_id] += pts
+      thirdAwarded += pts
     }
 
-    // Update players — add group_pts + third_pts into special_pts alongside existing special answers
-    const { data: allPlayers } = await supabase.from('players').select('id, special_pts')
-
-    // Re-sum special answers pts per player
-    const { data: allSpecialAns } = await supabase.from('special_answers').select('player_id, points_earned')
-    const specialTotals = {}
-    for (const ans of allSpecialAns || []) {
-      specialTotals[ans.player_id] = (specialTotals[ans.player_id] || 0) + (ans.points_earned || 0)
-    }
-
-    // Re-sum match pts per player
-    const { data: allPreds } = await supabase.from('match_predictions').select('player_id, total_pts, penalty_pts')
-    const stageTotals = {}
-    for (const p of allPreds || []) {
-      stageTotals[p.player_id] = (stageTotals[p.player_id] || 0) + (p.total_pts || 0) + (p.penalty_pts || 0)
-    }
-
-    for (const pl of allPlayers || []) {
-      const stage   = stageTotals[pl.id] || 0
-      const groupPts = groupTotals[pl.id] || 0
-      const thirdPts = thirdTotals[pl.id] || 0
-      const special  = (specialTotals[pl.id] || 0) + groupPts + thirdPts
-      await supabase.from('players').update({ stage_pts: stage, special_pts: special, total_pts: stage + special }).eq('id', pl.id)
-    }
-
-    const totalGroup = Object.values(groupTotals).reduce((s, v) => s + v, 0)
-    const totalThird = Object.values(thirdTotals).reduce((s, v) => s + v, 0)
-    setMsg(`✅ Group pts awarded: ${totalGroup} · Third place pts awarded: ${totalThird} · Points updated for all players!`)
-    reloadPlayers()
+    setMsg(`✅ Group rows scored: ${groupAwarded} pts · Third place rows scored: ${thirdAwarded} pts · Now click Recalculate Points to update totals.`)
   }
 
   const recalcPoints = async (silent = false) => {
