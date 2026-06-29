@@ -125,7 +125,7 @@ function MatchCard({ match, prediction, onSave, locked, jokersLeft = 3, koJokers
   }
 
   const stageBadge = {
-    r32: 'R16', qf: 'QF', sf: 'SF', '3rd': '3rd Place', final: '🏆 FINAL'
+    r32: 'R32', qf: 'QF', sf: 'SF', '3rd': '3rd Place', final: '🏆 FINAL'
   }
 
   return (
