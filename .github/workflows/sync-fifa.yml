@@ -160,10 +160,22 @@ jobs:
               }
             }
 
-            // 5. Update player totals
-            for (const [pid, pts] of Object.entries(totals)) {
-              await query(`players?id=eq.${pid}`, {
-                method: 'PATCH', body: JSON.stringify({ stage_pts: pts, total_pts: pts })
+            // 5. Update player stage_pts, re-sum special pts from DB, update total
+            const allPlayers = await query('players?select=id');
+            const groupPreds  = await query('group_predictions?select=player_id,points_earned');
+            const thirdPreds  = await query('third_place_picks?select=player_id,points_earned');
+            const specialAns  = await query('special_answers?select=player_id,points_earned');
+
+            const groupTotals = {}, thirdTotals = {}, specialTotals = {};
+            for (const r of groupPreds)  groupTotals[r.player_id]   = (groupTotals[r.player_id]  || 0) + (r.points_earned || 0);
+            for (const r of thirdPreds)  thirdTotals[r.player_id]   = (thirdTotals[r.player_id]  || 0) + (r.points_earned || 0);
+            for (const r of specialAns)  specialTotals[r.player_id] = (specialTotals[r.player_id]|| 0) + (r.points_earned || 0);
+
+            for (const pl of allPlayers) {
+              const stage   = totals[pl.id] || 0;
+              const special = (groupTotals[pl.id] || 0) + (thirdTotals[pl.id] || 0) + (specialTotals[pl.id] || 0);
+              await query(`players?id=eq.${pl.id}`, {
+                method: 'PATCH', body: JSON.stringify({ stage_pts: stage, special_pts: special, total_pts: stage + special })
               });
             }
             console.log(`✅ Recalculated points for ${Object.keys(totals).length} players`);
