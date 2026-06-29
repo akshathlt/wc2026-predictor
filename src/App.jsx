@@ -27,7 +27,7 @@ function Inner() {
   if (typeof window !== 'undefined') {
     const hash = window.location.hash
     if (hash.includes('type=recovery') && location.pathname !== '/change-password') {
-      window.location.replace('/wc2026-predictor/change-password' + hash)
+      window.location.replace('/change-password' + hash)
       return null
     }
   }

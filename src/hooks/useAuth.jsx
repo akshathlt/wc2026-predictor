@@ -39,7 +39,7 @@ export function AuthProvider({ children }) {
 
   const resetPassword = (email) =>
     supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/wc2026-predictor/change-password`
+      redirectTo: `${window.location.origin}/change-password`
     })
 
   const updatePassword = (newPassword) =>
