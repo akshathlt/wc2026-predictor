@@ -505,7 +505,8 @@ export default function Admin() {
     if (!window.confirm(`Set a temporary password for ${p.display_name} (${p.email})?\n\nThey will be required to change it on next login.`)) return
     setMsg('Generating temp password…')
     const { data: { session } } = await supabase.auth.getSession()
-    const res = await fetch(`https://neqdmjxbjwxmoiaxzkiy.supabase.co/functions/v1/set-temp-password`, {
+    const supabaseUrl = supabase.supabaseUrl || 'https://neqdmjxbjwxmoiaxzkiy.supabase.co'
+    const res = await fetch(`${supabaseUrl}/functions/v1/set-temp-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
       body: JSON.stringify({ target_user_id: p.user_id })
