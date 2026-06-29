@@ -271,42 +271,51 @@ export default function Admin() {
     const data = await fetchWithFallback(FIFA_MATCHES_URL)
     if (!data) { setMsg('FIFA API unavailable — try again later.'); return }
 
-    // Only matches with scores in the API
-    const fifaWithScores = (data.Results || []).filter(m =>
-      m.HomeTeamScore != null && m.AwayTeamScore != null
-    )
-    if (fifaWithScores.length === 0) { setMsg('No completed matches found in FIFA API yet.'); return }
-
     let updated = 0
     let skipped = 0
-    for (const fm of fifaWithScores) {
-      // Find matching DB record by match number (most reliable)
+    let teamsUpdated = 0
+
+    for (const fm of (data.Results || [])) {
       const match = matches.find(m => m.match_num === fm.MatchNumber)
       if (!match) continue
 
-      // Skip if DB already has this exact result — no need to update
-      if (match.home_goals === fm.HomeTeamScore && match.away_goals === fm.AwayTeamScore) {
-        skipped++
-        continue
+      const update = {}
+
+      // Update team names if FIFA now has real teams (overwrite placeholders)
+      const newHome = fm.Home?.ShortClubName || null
+      const newAway = fm.Away?.ShortClubName || null
+      if (newHome && newHome !== match.home_team) { update.home_team = newHome; teamsUpdated++ }
+      if (newAway && newAway !== match.away_team) { update.away_team = newAway; teamsUpdated++ }
+
+      // Update scores if available
+      if (fm.HomeTeamScore != null && fm.AwayTeamScore != null) {
+        if (match.home_goals === fm.HomeTeamScore && match.away_goals === fm.AwayTeamScore) {
+          skipped++
+        } else {
+          update.home_goals = fm.HomeTeamScore
+          update.away_goals = fm.AwayTeamScore
+          update.locked = true
+          if (fm.ResultType === 2 && fm.HomeTeamPenaltyScore != null) {
+            update.penalty_winner = fm.HomeTeamPenaltyScore > fm.AwayTeamPenaltyScore
+              ? fm.Home?.ShortClubName : fm.Away?.ShortClubName
+          }
+          updated++
+        }
       }
 
-      const update = { home_goals: fm.HomeTeamScore, away_goals: fm.AwayTeamScore, locked: true }
-      if (fm.ResultType === 2 && fm.HomeTeamPenaltyScore != null) {
-        update.penalty_winner = fm.HomeTeamPenaltyScore > fm.AwayTeamPenaltyScore
-          ? fm.Home?.ShortClubName : fm.Away?.ShortClubName
+      if (Object.keys(update).length > 0) {
+        await supabase.from('matches').update(update).eq('id', match.id)
       }
-      await supabase.from('matches').update(update).eq('id', match.id)
-      updated++
     }
 
-    if (updated > 0) {
-      setMsg(`✅ Synced ${updated} new result(s) · ${skipped} already up to date · recalculating points…`)
-      reloadMatches()
-      await recalcPoints(true) // auto-recalc after sync
-    } else {
-      setMsg(`✅ All ${skipped} result(s) already up to date — nothing to sync`)
-      reloadMatches()
-    }
+    const parts = []
+    if (updated > 0) parts.push(`${updated} new result(s)`)
+    if (teamsUpdated > 0) parts.push(`${teamsUpdated} team name(s) updated`)
+    if (skipped > 0) parts.push(`${skipped} already up to date`)
+
+    setMsg(`✅ Synced: ${parts.join(' · ')}${updated > 0 ? ' · recalculating points…' : ''}`)
+    reloadMatches()
+    if (updated > 0) await recalcPoints(true)
   }
 
   const recalcPoints = async (silent = false) => {
