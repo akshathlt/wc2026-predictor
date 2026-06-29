@@ -18,7 +18,7 @@ jobs:
           node << 'EOF'
           const SUPABASE_URL = process.env.SUPABASE_URL;
           const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY;
-          const FIFA_URL = 'https://api.fifa.com/api/v3/calendar/matches?language=en&count=200&idSeason=285023';
+          const FIFA_URL = 'https://api.fifa.com/api/v3/calendar/matches?language=en&count=200&idSeason=285023&fromDate=2026-06-28';
 
           const headers = {
             'apikey': SERVICE_KEY,

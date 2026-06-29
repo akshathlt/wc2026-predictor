@@ -5,6 +5,7 @@ import { fetchWithFallback } from '../lib/fetchWithFallback'
 
 const KNOCKOUT_STAGES = ['r32', 'qf', 'sf', '3rd', 'final']
 const FIFA_MATCHES_URL = 'https://api.fifa.com/api/v3/calendar/matches?language=en&count=200&idSeason=285023'
+const FIFA_KO_URL = 'https://api.fifa.com/api/v3/calendar/matches?language=en&count=200&idSeason=285023&fromDate=2026-06-28'
 
 // FIFA MatchStatus: 0=Finished(with score), 1=Upcoming, 3=Live, 12=HT, 4/5/6/7=also finished variants
 // Key: use HomeTeamScore != null as the definitive "has result" check
@@ -268,7 +269,8 @@ export default function Admin() {
   }
   const syncFromFIFA = async () => {
     setMsg('Checking FIFA API for new results…')
-    const data = await fetchWithFallback(FIFA_MATCHES_URL)
+    // Only fetch from Jun 28 onwards — group stage results are final and won't change
+    const data = await fetchWithFallback(FIFA_KO_URL)
     if (!data) { setMsg('FIFA API unavailable — try again later.'); return }
 
     let updated = 0
