@@ -374,20 +374,46 @@ export default function Admin() {
     setPlayers(prev => prev.map(x => x.id === p.id ? { ...x, is_admin: !x.is_admin } : x))
   }
 
+  const [tempPwdModal, setTempPwdModal] = useState(null) // { name, email, password }
+
   const resetPlayerPassword = async (p) => {
-    if (!window.confirm(`Send password reset email to ${p.display_name} (${p.email})?`)) return
-    const { error } = await supabase.auth.resetPasswordForEmail(p.email, {
-      redirectTo: `${window.location.origin}/change-password`
+    if (!window.confirm(`Set a temporary password for ${p.display_name} (${p.email})?\n\nThey will be required to change it on next login.`)) return
+    setMsg('Generating temp password…')
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch(`https://neqdmjxbjwxmoiaxzkiy.supabase.co/functions/v1/set-temp-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({ target_user_id: p.user_id })
     })
-    if (error) {
-      setMsg(`Failed: ${error.message}`)
-    } else {
-      setMsg(`✅ Password reset email sent to ${p.email}`)
-    }
+    const json = await res.json()
+    if (!res.ok) { setMsg(`Failed: ${json.error}`); return }
+    setMsg('')
+    setTempPwdModal({ name: p.display_name, email: p.email, password: json.temp_password })
   }
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
+
+      {/* Temp Password Modal */}
+      {tempPwdModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.85)' }}>
+          <div className="card p-8 max-w-sm w-full text-center">
+            <div className="text-4xl mb-3">🔑</div>
+            <h2 className="text-xl font-black mb-1">Temp Password Set</h2>
+            <p className="text-slate-400 text-sm mb-4">Share this with <strong className="text-white">{tempPwdModal.name}</strong> ({tempPwdModal.email}). They must change it on next login.</p>
+            <div className="bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 font-mono text-lg tracking-widest text-green-300 select-all mb-4">
+              {tempPwdModal.password}
+            </div>
+            <button
+              onClick={() => { navigator.clipboard.writeText(tempPwdModal.password); setMsg('✅ Copied to clipboard') }}
+              className="btn-secondary w-full mb-2">
+              Copy to Clipboard
+            </button>
+            <button onClick={() => setTempPwdModal(null)} className="text-slate-500 hover:text-white text-sm mt-1">Close</button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <h1 className="text-3xl font-black">⚙️ Admin Panel</h1>
