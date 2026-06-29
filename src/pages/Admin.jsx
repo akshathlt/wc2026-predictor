@@ -272,16 +272,51 @@ export default function Admin() {
     if (!data) { setMsg('FIFA API unavailable — try again later.'); return }
 
     let updated = 0
+    let inserted = 0
     let skipped = 0
     let teamsUpdated = 0
 
+    const STAGE_MAP = {
+      'First Stage': 'group',
+      'Round of 32': 'r32',
+      'Round of 16': 'r16',
+      'Quarter-final': 'qf',
+      'Semi-final': 'sf',
+      'Play-off for third place': '3rd',
+      'Final': 'final',
+    }
+
     for (const fm of (data.Results || [])) {
       const match = matches.find(m => m.match_num === fm.MatchNumber)
-      if (!match) continue
+
+      if (!match) {
+        // Insert missing match (e.g. knockout matches not yet in DB)
+        const stageName = fm.StageName?.[0]?.Description || ''
+        const stage = STAGE_MAP[stageName] || 'knockout'
+        const newMatch = {
+          match_num:  fm.MatchNumber,
+          home_team:  fm.Home?.ShortClubName || fm.PlaceHolderA || 'TBD',
+          away_team:  fm.Away?.ShortClubName || fm.PlaceHolderB || 'TBD',
+          match_date: fm.Date ? fm.Date.split('T')[0] : null,
+          match_time: fm.Date ? fm.Date.split('T')[1]?.slice(0,5) : null,
+          stage,
+          group_name: fm.GroupName?.[0]?.Description || null,
+          locked:     fm.HomeTeamScore != null,
+          home_goals: fm.HomeTeamScore ?? null,
+          away_goals: fm.AwayTeamScore ?? null,
+        }
+        if (fm.ResultType === 2 && fm.HomeTeamPenaltyScore != null) {
+          newMatch.penalty_winner = fm.HomeTeamPenaltyScore > fm.AwayTeamPenaltyScore
+            ? fm.Home?.ShortClubName : fm.Away?.ShortClubName
+        }
+        await supabase.from('matches').insert(newMatch)
+        inserted++
+        continue
+      }
 
       const update = {}
 
-      // Update team names if FIFA now has real teams (overwrite placeholders)
+      // Update team names if FIFA now has real teams
       const newHome = fm.Home?.ShortClubName || null
       const newAway = fm.Away?.ShortClubName || null
       if (newHome && newHome !== match.home_team) { update.home_team = newHome; teamsUpdated++ }
@@ -309,9 +344,11 @@ export default function Admin() {
     }
 
     const parts = []
+    if (inserted > 0) parts.push(`${inserted} new match(es) inserted`)
     if (updated > 0) parts.push(`${updated} new result(s)`)
     if (teamsUpdated > 0) parts.push(`${teamsUpdated} team name(s) updated`)
     if (skipped > 0) parts.push(`${skipped} already up to date`)
+    if (parts.length === 0) parts.push('nothing to update')
 
     setMsg(`✅ Synced: ${parts.join(' · ')}${updated > 0 ? ' · recalculating points…' : ''}`)
     reloadMatches()
