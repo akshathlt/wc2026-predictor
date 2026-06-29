@@ -377,7 +377,7 @@ export default function Admin() {
   const resetPlayerPassword = async (p) => {
     if (!window.confirm(`Send password reset email to ${p.display_name} (${p.email})?`)) return
     const { error } = await supabase.auth.resetPasswordForEmail(p.email, {
-      redirectTo: `${window.location.origin}/wc2026-predictor/change-password`
+      redirectTo: `${window.location.origin}/change-password`
     })
     if (error) {
       setMsg(`Failed: ${error.message}`)

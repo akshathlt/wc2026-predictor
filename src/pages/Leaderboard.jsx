@@ -209,8 +209,8 @@ function PlayerRow({ p, rank, isMe }) {
 function ShareCard({ rank, total, pts, name }) {
   const [copied, setCopied] = useState(false)
   const canvasRef = useRef(null)
-  const shareText = `🏆 WC2026 Predictor\nI'm ranked #${rank} out of ${total} players with ${pts} pts!\n⚽ #WorldCup2026 #WC2026\nhttps://akshathlt.github.io/wc2026-predictor/`
-  const shareUrl  = 'https://akshathlt.github.io/wc2026-predictor/'
+  const shareText = `🏆 WC2026 Predictor\nI'm ranked #${rank} out of ${total} players with ${pts} pts!\n⚽ #WorldCup2026 #WC2026\nhttps://wc2026-predictor-dmz.pages.dev/`
+  const shareUrl  = 'https://wc2026-predictor-dmz.pages.dev/'
 
   const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '⚽'
   const rankColor = rank <= 3 ? '#22c55e' : rank <= Math.ceil(total / 2) ? '#fbbf24' : '#94a3b8'
@@ -265,7 +265,7 @@ function ShareCard({ rank, total, pts, name }) {
     // Bottom tag
     ctx.fillStyle = '#334155'
     ctx.font = '13px Arial'
-    ctx.fillText('akshathlt.github.io/wc2026-predictor  ·  SAP CPIT O2C-Engineering', W/2, 295)
+    ctx.fillText('wc2026-predictor-dmz.pages.dev  ·  SAP CPIT O2C-Engineering', W/2, 295)
   }
 
   // useEffect to draw
@@ -502,7 +502,7 @@ export default function Leaderboard() {
     const dayNum  = Math.max(1, Math.floor((Date.now() - new Date('2026-06-11T19:00:00Z').getTime()) / 86400000) + 1)
     const gap     = players.length > 1 ? (players[0]?.total_pts||0) - (players[1]?.total_pts||0) : 0
     const medals  = ['🥇','🥈','🥉','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟']
-    const appUrl  = window.location.origin + (window.location.pathname.includes('wc2026-predictor') ? '/wc2026-predictor' : '')
+    const appUrl  = window.location.origin
 
     const rowBg   = (i) => i % 2 === 0 ? '#0d1f35' : '#0a1a2e'
     const topBg   = ['#1a3a1a','#1a2a3a','#1f2a1a']

@@ -23,13 +23,8 @@ export function AuthProvider({ children }) {
       .then(({ data }) => setPlayer(data))
   }, [session])
 
-  const signInWithEmail = (email) => {
-    const isGH = window.location.hostname.includes('github.io')
-    const redirectTo = isGH
-      ? `${window.location.origin}/wc2026-predictor/`
-      : `${window.location.origin}/`
-    return supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } })
-  }
+  const signInWithEmail = (email) =>
+    supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: `${window.location.origin}/` } })
 
   const signInWithPassword = (email, password) =>
     supabase.auth.signInWithPassword({ email, password })
