@@ -226,7 +226,10 @@ function MatchCard({ match, prediction, onSave, locked, jokersLeft = 3, koJokers
                 try {
                   const res = await fetch('https://neqdmjxbjwxmoiaxzkiy.supabase.co/functions/v1/granite-insight', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5lcWRtanhiand4bW9pYXh6a2l5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5NDM5NTMsImV4cCI6MjA5NjUxOTk1M30.gMOnHzGTn1HpvcRnp0eY0tCvm1ohBvsCbHrp0Qsy60k'
+                    },
                     body: JSON.stringify({
                       home_team: match.home_team, away_team: match.away_team,
                       home_goals: match.home_goals, away_goals: match.away_goals,

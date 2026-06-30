@@ -2,6 +2,11 @@ const WATSONX_URL  = Deno.env.get('WATSONX_URL') || 'https://eu-de.ml.cloud.ibm.
 const PROJECT_ID   = Deno.env.get('WATSONX_PROJECT_ID')!
 const IBM_API_KEY  = Deno.env.get('IBM_API_KEY')!
 
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'content-type, authorization, apikey, x-client-info'
+}
+
 async function getIBMToken(): Promise<string> {
   const res = await fetch('https://iam.cloud.ibm.com/identity/token', {
     method: 'POST',
@@ -13,9 +18,7 @@ async function getIBMToken(): Promise<string> {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type' } })
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
     const { home_team, away_team, home_goals, away_goals, stage, penalty_winner } = await req.json()
@@ -32,10 +35,7 @@ Deno.serve(async (req) => {
 
     const res = await fetch(`${WATSONX_URL}/ml/v1/text/generation?version=2023-05-29`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({
         model_id: 'ibm/granite-3-3-8b-instruct',
         input: prompt,
@@ -48,12 +48,11 @@ Deno.serve(async (req) => {
     const insight = data.results?.[0]?.generated_text?.trim() || 'No insight available.'
 
     return new Response(JSON.stringify({ insight }), {
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      headers: { 'Content-Type': 'application/json', ...CORS }
     })
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      status: 500, headers: { 'Content-Type': 'application/json', ...CORS }
     })
   }
 })
