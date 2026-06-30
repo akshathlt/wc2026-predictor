@@ -167,6 +167,7 @@ export default function Admin() {
   const [tab,        setTab]        = useState('matches')
   const [report,     setReport]     = useState(null)
   const [syncLogs,   setSyncLogs]   = useState([])
+  const [matchFilter, setMatchFilter] = useState('all') // 'all' | date string | stage
   const [loadingReport, setLoadingReport] = useState(false)
 
   const TABS = [
@@ -561,18 +562,59 @@ export default function Admin() {
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2 items-center justify-between">
             <p className="text-slate-400 text-sm">Enter real scores after each match, or sync automatically from FIFA.</p>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button onClick={syncFromFIFA} className="btn-secondary !py-2 !px-4 text-sm">📡 Sync from FIFA API + Recalculate</button>
               <button onClick={recalcGroupAndThirdPts} className="btn-secondary !py-2 !px-4 text-sm">📋 Score Group & 3rd Place Picks</button>
               <button onClick={() => recalcPoints()} className="btn-primary !py-2 !px-4 text-sm">🔄 Recalculate Points Only</button>
             </div>
           </div>
-          <div className="divide-y divide-slate-800 rounded-xl border border-slate-700 px-4">
-            {matches.length === 0
-              ? <p className="text-slate-500 text-sm text-center py-6">No matches loaded yet.</p>
-              : matches.map(m => <MatchResultForm key={m.id} match={m} onSaved={reloadMatches} />)
-            }
-          </div>
+
+          {/* Filters */}
+          {matches.length > 0 && (() => {
+            const stages = [...new Set(matches.map(m => m.stage))].filter(Boolean)
+            const dates  = [...new Set(matches.map(m => m.match_date))].filter(Boolean).sort()
+            const STAGE_LABEL = { group: 'Group', r32: 'Round of 32', r16: 'Round of 16', qf: 'Quarter-final', sf: 'Semi-final', '3rd': '3rd Place', final: 'Final' }
+            const filteredMatches = matches.filter(m => {
+              if (matchFilter === 'all') return true
+              if (matchFilter === m.stage) return true
+              if (matchFilter === m.match_date) return true
+              return false
+            })
+            return (
+              <>
+                <div className="flex flex-wrap gap-1.5">
+                  <button onClick={() => setMatchFilter('all')}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${matchFilter === 'all' ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+                    All ({matches.length})
+                  </button>
+                  {stages.map(s => (
+                    <button key={s} onClick={() => setMatchFilter(s)}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${matchFilter === s ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+                      {STAGE_LABEL[s] || s} ({matches.filter(m => m.stage === s).length})
+                    </button>
+                  ))}
+                  <span className="text-slate-600 text-xs self-center px-1">|</span>
+                  {dates.slice(-14).map(d => (
+                    <button key={d} onClick={() => setMatchFilter(d)}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${matchFilter === d ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+                      {new Date(d).toLocaleDateString([], { day: '2-digit', month: 'short' })} ({matches.filter(m => m.match_date === d).length})
+                    </button>
+                  ))}
+                </div>
+                <div className="divide-y divide-slate-800 rounded-xl border border-slate-700 px-4">
+                  {filteredMatches.length === 0
+                    ? <p className="text-slate-500 text-sm text-center py-6">No matches for this filter.</p>
+                    : filteredMatches.map(m => <MatchResultForm key={m.id} match={m} onSaved={reloadMatches} />)
+                  }
+                </div>
+              </>
+            )
+          })()}
+          {matches.length === 0 && (
+            <div className="divide-y divide-slate-800 rounded-xl border border-slate-700 px-4">
+              <p className="text-slate-500 text-sm text-center py-6">No matches loaded yet.</p>
+            </div>
+          )}
         </div>
       )}
 
