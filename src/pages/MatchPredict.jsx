@@ -96,6 +96,8 @@ function MatchCard({ match, prediction, onSave, locked, jokersLeft = 3, koJokers
   const [penWinner, setPenWinner] = useState(prediction?.penalty_winner ?? '')
   const [saving,    setSaving]    = useState(false)
   const [saved,     setSaved]     = useState(false)
+  const [insight,   setInsight]   = useState('')
+  const [loadingInsight, setLoadingInsight] = useState(false)
 
   // Sync joker state when prediction changes from parent
   useEffect(() => {
@@ -211,6 +213,43 @@ function MatchCard({ match, prediction, onSave, locked, jokersLeft = 3, koJokers
       {hasResult && knockout && resultDraw && (
         <div className="text-xs text-center text-purple-300 mb-2">
           🥅 Went to penalties → {match.penalty_winner || 'TBD'}
+        </div>
+      )}
+
+      {/* IBM Granite AI Insight */}
+      {hasResult && (
+        <div className="mb-2">
+          {!insight && (
+            <button
+              onClick={async () => {
+                setLoadingInsight(true)
+                try {
+                  const res = await fetch('https://neqdmjxbjwxmoiaxzkiy.supabase.co/functions/v1/granite-insight', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      home_team: match.home_team, away_team: match.away_team,
+                      home_goals: match.home_goals, away_goals: match.away_goals,
+                      stage: match.stage, penalty_winner: match.penalty_winner || null
+                    })
+                  })
+                  const data = await res.json()
+                  setInsight(data.insight || 'No insight available.')
+                } catch { setInsight('Could not load insight.') }
+                setLoadingInsight(false)
+              }}
+              disabled={loadingInsight}
+              className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-50">
+              {loadingInsight
+                ? <><span className="animate-spin">⚙️</span> Asking IBM Granite…</>
+                : <>🤖 AI Match Insight (IBM Granite)</>}
+            </button>
+          )}
+          {insight && (
+            <div className="mt-1 p-2.5 bg-blue-900/20 border border-blue-700/40 rounded-lg text-xs text-blue-200 leading-relaxed">
+              <span className="text-blue-400 font-semibold">🤖 IBM Granite: </span>{insight}
+            </div>
+          )}
         </div>
       )}
 
