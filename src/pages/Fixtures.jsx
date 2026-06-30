@@ -192,6 +192,7 @@ export default function Fixtures() {
   const [error, setError] = useState(null)
   const [view, setView] = useState('group')
   const [knockoutView, setKnockoutView] = useState('bracket')
+  const [dateFilter, setDateFilter] = useState('today')
 
   useEffect(() => {
     Promise.all([
@@ -287,6 +288,8 @@ export default function Fixtures() {
   })
   const stageOrder = ['Round of 32', 'Round of 16', 'Quarter-final', 'Semi-final', 'Play-off for third place', 'Final']
 
+  const todayStr = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD in local time
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
@@ -303,14 +306,49 @@ export default function Fixtures() {
         </div>
       </div>
 
+      {/* Date filter — shown for Group Stage and Knockout List */}
+      {(view === 'group' || (view === 'knockout' && knockoutView === 'list')) && (() => {
+        const allDays = view === 'group'
+          ? Object.keys(byDay).sort((a, b) => new Date(a) - new Date(b))
+          : [...new Set(knockoutMatches.map(m => m.date ? new Date(m.date).toLocaleDateString('en-CA') : null).filter(Boolean))].sort()
+        return (
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            <button onClick={() => setDateFilter('all')}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${dateFilter === 'all' ? 'bg-slate-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+              All Dates
+            </button>
+            {allDays.map(day => {
+              const isToday = new Date(day).toLocaleDateString('en-CA') === todayStr
+              const label = new Date(day).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })
+              const active = dateFilter === day || (dateFilter === 'today' && isToday)
+              return (
+                <button key={day} onClick={() => setDateFilter(day)}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${active ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+                  {label}{isToday ? ' 🔴' : ''}
+                </button>
+              )
+            })}
+          </div>
+        )
+      })()}
+
       {/* Timezone indicator */}
       {view === 'group' && (
         <p className="text-xs text-slate-500 mb-4">🌍 Times shown in: <span className="text-green-400">{tz}</span> · Change in your profile</p>
       )}
 
-      {view === 'group' && Object.entries(byDay).map(([day, ms]) => (
-        <DayGroup key={day} day={day} matches={ms} standings={standings} tz={tz} />
-      ))}
+      {view === 'group' && (() => {
+        const entries = Object.entries(byDay).sort(([a], [b]) => new Date(a) - new Date(b))
+        const filtered = dateFilter === 'all'
+          ? entries
+          : entries.filter(([day]) => {
+              const d = new Date(day).toLocaleDateString('en-CA')
+              return dateFilter === 'today' ? d === todayStr : d === new Date(dateFilter).toLocaleDateString('en-CA')
+            })
+        return filtered.map(([day, ms]) => (
+          <DayGroup key={day} day={day} matches={ms} standings={standings} tz={tz} />
+        ))
+      })()}
 
       {view === 'knockout' && (
         <>
@@ -325,9 +363,23 @@ export default function Fixtures() {
             </button>
           </div>
           {knockoutView === 'bracket' && <KnockoutBracket />}
-          {knockoutView === 'list' && stageOrder.filter(s => byStage[s]).map(s => (
-            <KnockoutSection key={s} title={s === 'Final' ? '🏆 Final' : s === 'Play-off for third place' ? '🥉 Third Place Play-off' : s} matches={byStage[s]} tz={tz} />
-          ))}
+          {knockoutView === 'list' && (() => {
+            const filtered = dateFilter === 'all'
+              ? knockoutMatches
+              : knockoutMatches.filter(m => {
+                  if (!m.date) return false
+                  const d = new Date(m.date).toLocaleDateString('en-CA')
+                  return dateFilter === 'today' ? d === todayStr : d === new Date(dateFilter).toLocaleDateString('en-CA')
+                })
+            const byStageFiltered = {}
+            filtered.forEach(m => {
+              if (!byStageFiltered[m.stageName]) byStageFiltered[m.stageName] = []
+              byStageFiltered[m.stageName].push(m)
+            })
+            return stageOrder.filter(s => byStageFiltered[s]).map(s => (
+              <KnockoutSection key={s} title={s === 'Final' ? '🏆 Final' : s === 'Play-off for third place' ? '🥉 Third Place Play-off' : s} matches={byStageFiltered[s]} tz={tz} />
+            ))
+          })()}
         </>
       )}
     </div>
