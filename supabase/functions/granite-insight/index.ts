@@ -32,8 +32,9 @@ Deno.serve(async (req) => {
     const prompt = `You are a soccer tactical analyst. In 2-3 sentences, explain why ${home_team} ${home_goals}-${away_goals} ${away_team}${penText} in the ${stageLabel[stage] || stage} of the 2026 FIFA World Cup makes tactical sense. Focus on team strengths, match dynamics, and what this result means for the tournament. Be insightful and specific.`
 
     const token = await getIBMToken()
+    if (!token) throw new Error('Failed to get IBM IAM token')
 
-    const res = await fetch(`${WATSONX_URL}/ml/v1/text/generation?version=2023-05-29`, {
+    const watsonRes = await fetch(`${WATSONX_URL}/ml/v1/text/generation?version=2023-05-29`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({
@@ -44,8 +45,9 @@ Deno.serve(async (req) => {
       })
     })
 
-    const data = await res.json()
-    const insight = data.results?.[0]?.generated_text?.trim() || 'No insight available.'
+    const data = await watsonRes.json()
+    console.log('Watson response:', JSON.stringify(data))
+    const insight = data.results?.[0]?.generated_text?.trim() || data.error || data.message || 'No insight available.'
 
     return new Response(JSON.stringify({ insight }), {
       headers: { 'Content-Type': 'application/json', ...CORS }
