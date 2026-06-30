@@ -2,6 +2,74 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useEffect, useState } from 'react'
 import { LOCK_DATE } from '../lib/data'
+import { supabase } from '../lib/supabase'
+import Avatar from '../components/Avatar'
+
+const MEDALS = ['🥇', '🥈', '🥉']
+const COLORS = ['#22c55e', '#fbbf24', '#a78bfa']
+
+function MiniBar({ pct, color }) {
+  return (
+    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden w-full">
+      <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: color }} />
+    </div>
+  )
+}
+
+function Top3Chart({ players }) {
+  if (!players.length) return null
+  const maxPts = players[0].total_pts || 1
+
+  // Build simple bar chart columns: match vs special breakdown
+  return (
+    <div className="card p-6">
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="font-bold text-lg">🏆 Top 3 Race</h3>
+        <Link to="/leaderboard" className="text-xs text-green-400 hover:text-green-300">Full leaderboard →</Link>
+      </div>
+      <div className="space-y-4">
+        {players.slice(0, 3).map((p, i) => {
+          const matchPct  = Math.round(((p.stage_pts || 0) / maxPts) * 100)
+          const specialPct = Math.round(((p.special_pts || 0) / maxPts) * 100)
+          const totalPct  = Math.min(100, Math.round(((p.total_pts || 0) / maxPts) * 100))
+          return (
+            <div key={p.id} className="space-y-2">
+              <div className="flex items-center gap-3">
+                <span className="text-xl w-7 text-center">{MEDALS[i]}</span>
+                <Avatar style={p.avatar_seed || 'adventurer'} name={p.display_name} size="sm" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-sm truncate">{p.display_name}</span>
+                    <span className="font-black text-base tabular-nums" style={{ color: COLORS[i] }}>{p.total_pts}</span>
+                  </div>
+                  {/* Stacked bar: match pts + special pts */}
+                  <div className="h-3 bg-slate-800 rounded-full overflow-hidden mt-1 relative">
+                    <div className="absolute h-full rounded-full transition-all duration-700 opacity-70"
+                      style={{ width: `${specialPct}%`, background: COLORS[i] }} />
+                    <div className="absolute h-full rounded-full transition-all duration-700"
+                      style={{ width: `${matchPct}%`, background: '#22c55e' }} />
+                  </div>
+                  <div className="flex gap-3 text-[10px] text-slate-500 mt-0.5">
+                    <span><span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" />Match: {p.stage_pts || 0}</span>
+                    <span><span className="inline-block w-2 h-2 rounded-full mr-1" style={{ background: COLORS[i] }} />Special: {p.special_pts || 0}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Gap indicator */}
+      {players.length >= 2 && (
+        <div className="mt-4 pt-4 border-t border-slate-800 flex justify-between text-xs text-slate-500">
+          <span>Gap 1st → 2nd: <b className="text-yellow-400">{(players[0].total_pts || 0) - (players[1].total_pts || 0)} pts</b></span>
+          <span>Players: <b className="text-slate-300">{players.length}</b></span>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function Countdown() {
   const [diff, setDiff] = useState(LOCK_DATE - Date.now())
@@ -11,7 +79,6 @@ function Countdown() {
     return () => clearInterval(t)
   }, [])
 
-  // All predictions locked
   if (diff <= 0) return (
     <div className="space-y-2 text-center">
       <div className="inline-flex items-center gap-2 bg-green-900/40 border border-green-700 rounded-xl px-5 py-2.5">
@@ -26,8 +93,6 @@ function Countdown() {
   const h = Math.floor((diff % 86400000) / 3600000)
   const m = Math.floor((diff % 3600000) / 60000)
   const s = Math.floor((diff % 60000) / 1000)
-
-  // Urgent — less than 6 hours left
   const urgent = diff < 6 * 3600000
 
   return (
@@ -51,6 +116,15 @@ function Countdown() {
 
 export default function Home() {
   const { session, player } = useAuth()
+  const [topPlayers, setTopPlayers] = useState([])
+
+  useEffect(() => {
+    supabase.from('players')
+      .select('id, display_name, avatar_seed, total_pts, stage_pts, special_pts')
+      .order('total_pts', { ascending: false })
+      .limit(10)
+      .then(({ data }) => { if (data) setTopPlayers(data) })
+  }, [])
 
   const features = [
     { icon: '📋', title: 'Group Stage', desc: 'Drag & drop all 48 teams across 12 groups (A–L)' },
@@ -91,6 +165,41 @@ export default function Home() {
           </Link>
         )}
       </div>
+
+      {/* Live Top 3 chart */}
+      {topPlayers.length > 0 && (
+        <div className="grid sm:grid-cols-2 gap-6 items-start">
+          <Top3Chart players={topPlayers} />
+
+          {/* Mini leaderboard — top 10 */}
+          <div className="card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg">📊 Standings</h3>
+              <Link to="/leaderboard" className="text-xs text-green-400 hover:text-green-300">See all →</Link>
+            </div>
+            <div className="space-y-2">
+              {topPlayers.map((p, i) => {
+                const isMe = p.id === player?.id
+                const maxPts = topPlayers[0].total_pts || 1
+                return (
+                  <div key={p.id} className={`flex items-center gap-2 py-1.5 rounded-lg px-2 ${isMe ? 'bg-green-900/20 border border-green-800/40' : ''}`}>
+                    <span className="w-6 text-center text-sm font-black text-slate-500">
+                      {i < 3 ? MEDALS[i] : <span className="text-xs">{i + 1}</span>}
+                    </span>
+                    <span className="flex-1 text-sm font-medium truncate">
+                      {p.display_name}{isMe ? <span className="text-green-400 text-xs ml-1">(you)</span> : ''}
+                    </span>
+                    <div className="w-16 hidden sm:block">
+                      <MiniBar pct={Math.round((p.total_pts / maxPts) * 100)} color={i < 3 ? COLORS[i] : '#475569'} />
+                    </div>
+                    <span className="text-sm font-black tabular-nums text-yellow-400 w-10 text-right">{p.total_pts}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Features grid */}
       <div>
