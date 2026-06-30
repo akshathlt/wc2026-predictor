@@ -8,63 +8,119 @@ import Avatar from '../components/Avatar'
 const MEDALS = ['🥇', '🥈', '🥉']
 const COLORS = ['#22c55e', '#fbbf24', '#a78bfa']
 
-function MiniBar({ pct, color }) {
+function LineChart({ series }) {
+  // series: [{ name, color, points: [{ x: matchNum, y: cumulativePts }] }]
+  if (!series.length || !series[0].points.length) return null
+
+  const W = 500, H = 200, PAD = { top: 16, right: 16, bottom: 28, left: 40 }
+  const innerW = W - PAD.left - PAD.right
+  const innerH = H - PAD.top - PAD.bottom
+
+  const allPoints = series.flatMap(s => s.points)
+  const maxX = Math.max(...allPoints.map(p => p.x), 1)
+  const maxY = Math.max(...allPoints.map(p => p.y), 1)
+
+  const sx = (x) => PAD.left + (x / maxX) * innerW
+  const sy = (y) => PAD.top + innerH - (y / maxY) * innerH
+
+  const polyline = (pts) => pts.map(p => `${sx(p.x)},${sy(p.y)}`).join(' ')
+
+  // Y axis ticks
+  const yTicks = [0, Math.round(maxY * 0.25), Math.round(maxY * 0.5), Math.round(maxY * 0.75), maxY]
+
   return (
-    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden w-full">
-      <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: color }} />
-    </div>
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 200 }}>
+      {/* Grid lines */}
+      {yTicks.map(tick => (
+        <g key={tick}>
+          <line x1={PAD.left} y1={sy(tick)} x2={W - PAD.right} y2={sy(tick)}
+            stroke="#1e293b" strokeWidth="1" />
+          <text x={PAD.left - 6} y={sy(tick) + 4} textAnchor="end"
+            fill="#475569" fontSize="9" fontFamily="Arial">{tick}</text>
+        </g>
+      ))}
+
+      {/* Lines */}
+      {series.map((s, i) => (
+        <g key={s.name}>
+          <polyline
+            points={polyline(s.points)}
+            fill="none"
+            stroke={s.color}
+            strokeWidth={i === 0 ? 2.5 : 2}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            opacity={0.9}
+          />
+          {/* Last point dot + label */}
+          {s.points.length > 0 && (() => {
+            const last = s.points[s.points.length - 1]
+            return (
+              <g>
+                <circle cx={sx(last.x)} cy={sy(last.y)} r="4" fill={s.color} />
+                <text x={sx(last.x) + 6} y={sy(last.y) + 4}
+                  fill={s.color} fontSize="9" fontFamily="Arial" fontWeight="bold">
+                  {last.y}
+                </text>
+              </g>
+            )
+          })()}
+        </g>
+      ))}
+
+      {/* X axis label */}
+      <text x={W / 2} y={H - 4} textAnchor="middle" fill="#475569" fontSize="9" fontFamily="Arial">
+        Match →
+      </text>
+
+      {/* Legend */}
+      {series.map((s, i) => (
+        <g key={s.name} transform={`translate(${PAD.left + i * 140}, ${H - 10})`}>
+          <line x1="0" y1="0" x2="12" y2="0" stroke={s.color} strokeWidth="2" />
+          <circle cx="6" cy="0" r="3" fill={s.color} />
+          <text x="16" y="4" fill={s.color} fontSize="9" fontFamily="Arial"
+            fontWeight="bold" style={{ maxWidth: 120 }}>
+            {s.name.length > 14 ? s.name.slice(0, 13) + '…' : s.name}
+          </text>
+        </g>
+      ))}
+    </svg>
   )
 }
 
-function Top3Chart({ players }) {
+function Top3Chart({ players, matchSeries }) {
   if (!players.length) return null
-  const maxPts = players[0].total_pts || 1
 
-  // Build simple bar chart columns: match vs special breakdown
   return (
     <div className="card p-6">
-      <div className="flex items-center justify-between mb-5">
-        <h3 className="font-bold text-lg">🏆 Top 3 Race</h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-bold text-lg">🏆 Top 3 Points Race</h3>
         <Link to="/leaderboard" className="text-xs text-green-400 hover:text-green-300">Full leaderboard →</Link>
       </div>
-      <div className="space-y-4">
-        {players.slice(0, 3).map((p, i) => {
-          const matchPct  = Math.round(((p.stage_pts || 0) / maxPts) * 100)
-          const specialPct = Math.round(((p.special_pts || 0) / maxPts) * 100)
-          const totalPct  = Math.min(100, Math.round(((p.total_pts || 0) / maxPts) * 100))
-          return (
-            <div key={p.id} className="space-y-2">
-              <div className="flex items-center gap-3">
-                <span className="text-xl w-7 text-center">{MEDALS[i]}</span>
-                <Avatar style={p.avatar_seed || 'adventurer'} name={p.display_name} size="sm" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-sm truncate">{p.display_name}</span>
-                    <span className="font-black text-base tabular-nums" style={{ color: COLORS[i] }}>{p.total_pts}</span>
-                  </div>
-                  {/* Stacked bar: match pts + special pts */}
-                  <div className="h-3 bg-slate-800 rounded-full overflow-hidden mt-1 relative">
-                    <div className="absolute h-full rounded-full transition-all duration-700 opacity-70"
-                      style={{ width: `${specialPct}%`, background: COLORS[i] }} />
-                    <div className="absolute h-full rounded-full transition-all duration-700"
-                      style={{ width: `${matchPct}%`, background: '#22c55e' }} />
-                  </div>
-                  <div className="flex gap-3 text-[10px] text-slate-500 mt-0.5">
-                    <span><span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" />Match: {p.stage_pts || 0}</span>
-                    <span><span className="inline-block w-2 h-2 rounded-full mr-1" style={{ background: COLORS[i] }} />Special: {p.special_pts || 0}</span>
-                  </div>
-                </div>
-              </div>
+
+      {matchSeries.length > 0
+        ? <LineChart series={matchSeries} />
+        : <div className="h-[200px] flex items-center justify-center text-slate-600 text-sm">Loading chart…</div>
+      }
+
+      {/* Summary row */}
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {players.slice(0, 3).map((p, i) => (
+          <div key={p.id} className="text-center">
+            <div className="text-lg">{MEDALS[i]}</div>
+            <div className="text-xs font-semibold truncate" style={{ color: COLORS[i] }}>
+              {p.display_name.length > 10 ? p.display_name.slice(0, 9) + '…' : p.display_name}
             </div>
-          )
-        })}
+            <div className="font-black text-base" style={{ color: COLORS[i] }}>{p.total_pts}</div>
+            <div className="text-[10px] text-slate-500">pts</div>
+          </div>
+        ))}
       </div>
 
-      {/* Gap indicator */}
       {players.length >= 2 && (
-        <div className="mt-4 pt-4 border-t border-slate-800 flex justify-between text-xs text-slate-500">
-          <span>Gap 1st → 2nd: <b className="text-yellow-400">{(players[0].total_pts || 0) - (players[1].total_pts || 0)} pts</b></span>
-          <span>Players: <b className="text-slate-300">{players.length}</b></span>
+        <div className="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-500 flex justify-between">
+          <span>Gap 1→2: <b className="text-yellow-400">{(players[0].total_pts || 0) - (players[1].total_pts || 0)} pts</b></span>
+          <span>{players.length} players competing</span>
         </div>
       )}
     </div>
@@ -117,13 +173,59 @@ function Countdown() {
 export default function Home() {
   const { session, player } = useAuth()
   const [topPlayers, setTopPlayers] = useState([])
+  const [matchSeries, setMatchSeries] = useState([])
 
   useEffect(() => {
     supabase.from('players')
       .select('id, display_name, avatar_seed, total_pts, stage_pts, special_pts')
       .order('total_pts', { ascending: false })
       .limit(10)
-      .then(({ data }) => { if (data) setTopPlayers(data) })
+      .then(({ data }) => {
+        if (!data) return
+        setTopPlayers(data)
+
+        // Fetch match predictions for top 3 to build line chart
+        const top3 = data.slice(0, 3)
+        const top3Ids = top3.map(p => p.id)
+
+        Promise.all([
+          supabase.from('match_predictions')
+            .select('player_id, match_id, total_pts, penalty_pts')
+            .in('player_id', top3Ids),
+          supabase.from('matches')
+            .select('id, match_num')
+            .not('home_goals', 'is', null)
+            .order('match_num')
+        ]).then(([{ data: preds }, { data: matches }]) => {
+          if (!preds || !matches) return
+
+          const matchNumMap = {}
+          matches.forEach(m => { matchNumMap[m.id] = m.match_num })
+
+          const series = top3.map((p, i) => {
+            const myPreds = preds
+              .filter(pr => pr.player_id === p.id)
+              .map(pr => ({
+                matchNum: matchNumMap[pr.match_id] || 0,
+                pts: (pr.total_pts || 0) + (pr.penalty_pts || 0)
+              }))
+              .filter(pr => pr.matchNum > 0)
+              .sort((a, b) => a.matchNum - b.matchNum)
+
+            // Build cumulative points
+            let cum = 0
+            const points = myPreds.map(pr => {
+              cum += pr.pts
+              return { x: pr.matchNum, y: cum }
+            })
+            if (points.length) points.unshift({ x: 0, y: 0 })
+
+            return { name: p.display_name, color: COLORS[i], points }
+          })
+
+          setMatchSeries(series)
+        })
+      })
   }, [])
 
   const features = [
@@ -166,10 +268,10 @@ export default function Home() {
         )}
       </div>
 
-      {/* Live Top 3 chart */}
+      {/* Live Top 3 line chart + mini standings */}
       {topPlayers.length > 0 && (
         <div className="grid sm:grid-cols-2 gap-6 items-start">
-          <Top3Chart players={topPlayers} />
+          <Top3Chart players={topPlayers} matchSeries={matchSeries} />
 
           {/* Mini leaderboard — top 10 */}
           <div className="card p-6">
@@ -190,7 +292,9 @@ export default function Home() {
                       {p.display_name}{isMe ? <span className="text-green-400 text-xs ml-1">(you)</span> : ''}
                     </span>
                     <div className="w-16 hidden sm:block">
-                      <MiniBar pct={Math.round((p.total_pts / maxPts) * 100)} color={i < 3 ? COLORS[i] : '#475569'} />
+                      <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${Math.round((p.total_pts / maxPts) * 100)}%`, background: i < 3 ? COLORS[i] : '#475569' }} />
+                      </div>
                     </div>
                     <span className="text-sm font-black tabular-nums text-yellow-400 w-10 text-right">{p.total_pts}</span>
                   </div>
