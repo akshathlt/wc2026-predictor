@@ -106,6 +106,9 @@ function MatchCard({ match, prediction, onSave, locked, jokersLeft = 3, koJokers
 
   const isLocked     = locked || match.locked
   const knockout     = isKnockout(match.stage)
+  const teamsKnown   = match.home_team && match.away_team &&
+                       !/^W\d+$/.test(match.home_team) && !/^W\d+$/.test(match.away_team) &&
+                       match.home_team !== 'TBD' && match.away_team !== 'TBD'
   const isDraw       = home !== '' && away !== '' && Number(home) === Number(away)
   const hasResult    = match.home_goals != null
   const resultDraw   = hasResult && match.home_goals === match.away_goals
@@ -216,8 +219,8 @@ function MatchCard({ match, prediction, onSave, locked, jokersLeft = 3, koJokers
         </div>
       )}
 
-      {/* AI Insight — post-match explanation OR pre-match prediction */}
-      {(hasResult || (!isLocked && !hasResult && knockout)) && (
+      {/* AI Insight — only when both teams are known */}
+      {teamsKnown && (hasResult || (!isLocked && !hasResult && knockout)) && (
         <div className="mb-2">
           {!insight && (
             <button
