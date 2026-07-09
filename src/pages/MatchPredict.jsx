@@ -106,9 +106,8 @@ function MatchCard({ match, prediction, onSave, locked, jokersLeft = 3, koJokers
 
   const isLocked     = locked || match.locked
   const knockout     = isKnockout(match.stage)
-  const teamsKnown   = match.home_team && match.away_team &&
-                       !/^W\d+$/.test(match.home_team) && !/^W\d+$/.test(match.away_team) &&
-                       match.home_team !== 'TBD' && match.away_team !== 'TBD'
+  const isPlaceholder = (name) => !name || /^(W|RU)\d+$/.test(name) || name === 'TBD'
+  const teamsKnown   = !isPlaceholder(match.home_team) && !isPlaceholder(match.away_team)
   const isDraw       = home !== '' && away !== '' && Number(home) === Number(away)
   const hasResult    = match.home_goals != null
   const resultDraw   = hasResult && match.home_goals === match.away_goals
