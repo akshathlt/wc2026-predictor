@@ -216,8 +216,8 @@ function MatchCard({ match, prediction, onSave, locked, jokersLeft = 3, koJokers
         </div>
       )}
 
-      {/* IBM Granite AI Insight */}
-      {hasResult && (
+      {/* AI Insight — post-match explanation OR pre-match prediction */}
+      {(hasResult || (!isLocked && !hasResult && knockout)) && (
         <div className="mb-2">
           {!insight && (
             <button
@@ -233,7 +233,8 @@ function MatchCard({ match, prediction, onSave, locked, jokersLeft = 3, koJokers
                     body: JSON.stringify({
                       home_team: match.home_team, away_team: match.away_team,
                       home_goals: match.home_goals, away_goals: match.away_goals,
-                      stage: match.stage, penalty_winner: match.penalty_winner || null
+                      stage: match.stage, penalty_winner: match.penalty_winner || null,
+                      mode: hasResult ? 'explain' : 'predict'
                     })
                   })
                   const data = await res.json()
@@ -244,13 +245,17 @@ function MatchCard({ match, prediction, onSave, locked, jokersLeft = 3, koJokers
               disabled={loadingInsight}
               className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-50">
               {loadingInsight
-                ? <><span className="animate-spin">⚙️</span> Asking IBM Granite…</>
-                : <>🤖 AI Match Insight (IBM Granite)</>}
+                ? <><span className="animate-spin">⚙️</span> Asking AI…</>
+                : hasResult
+                  ? <>🤖 AI Match Insight</>
+                  : <>🤖 AI Match Prediction</>}
             </button>
           )}
           {insight && (
-            <div className="mt-1 p-2.5 bg-blue-900/20 border border-blue-700/40 rounded-lg text-xs text-blue-200 leading-relaxed">
-              <span className="text-blue-400 font-semibold">🤖 IBM Granite: </span>{insight}
+            <div className={`mt-1 p-2.5 rounded-lg text-xs leading-relaxed border ${hasResult ? 'bg-blue-900/20 border-blue-700/40 text-blue-200' : 'bg-purple-900/20 border-purple-700/40 text-purple-200'}`}>
+              <span className={`font-semibold ${hasResult ? 'text-blue-400' : 'text-purple-400'}`}>
+                {hasResult ? '🤖 AI Insight: ' : '🤖 AI Prediction: '}
+              </span>{insight}
             </div>
           )}
         </div>
