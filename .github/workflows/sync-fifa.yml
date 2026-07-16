@@ -96,11 +96,13 @@ jobs:
                 await query('matches', { method: 'POST', headers: { 'Prefer': 'return=minimal' }, body: JSON.stringify(newMatch) })
                 inserted++
               } else if (dbMatch) {
-                // Update team names if they changed from TBD to real
-                const needsUpdate = (dbMatch.home_team === 'TBD' && homeTeam !== 'TBD') ||
-                                    (dbMatch.away_team === 'TBD' && awayTeam !== 'TBD')
+                // Update team names: also catches W101/RU101 placeholders, not just 'TBD'
+                const isPlaceholder = (n) => !n || n === 'TBD' || /^(W|RU|L)\d+$/.test(n)
+                const needsUpdate = (isPlaceholder(dbMatch.home_team) && !isPlaceholder(homeTeam)) ||
+                                    (isPlaceholder(dbMatch.away_team) && !isPlaceholder(awayTeam))
                 if (needsUpdate) {
                   await query(`matches?id=eq.${dbMatch.id}`, { method: 'PATCH', body: JSON.stringify({ home_team: homeTeam, away_team: awayTeam }) })
+                  console.log(`🔄 Updated teams M${fm.MatchNumber}: ${homeTeam} vs ${awayTeam}`)
                 }
               }
             }
