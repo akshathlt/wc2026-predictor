@@ -198,10 +198,13 @@ function PredictionBreakdown({ playerId }) {
           </div>
           <div className="px-3 pb-3 space-y-1.5">
             {data.specialRows.map(a => (
-              <div key={a.id} className={`rounded-lg p-2 text-xs flex items-center justify-between
+              <div key={a.id} className={`rounded-lg p-2 text-xs flex items-start justify-between gap-2
                 ${a.correct ? 'bg-green-900/20 border border-green-800/40' : 'bg-slate-800/40 border border-slate-700/40'}`}>
-                <span className={a.correct ? 'text-green-300' : 'text-slate-500'}>{a.special_questions?.question}</span>
-                <span className={`font-bold ml-2 shrink-0 ${a.correct ? 'text-yellow-400' : 'text-slate-600'}`}>
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className={a.correct ? 'text-green-300' : 'text-slate-500'}>{a.special_questions?.question}</span>
+                  <span className={`font-semibold truncate ${a.correct ? 'text-white' : 'text-slate-400'}`}>→ {a.answer}</span>
+                </div>
+                <span className={`font-bold shrink-0 ${a.correct ? 'text-yellow-400' : 'text-slate-600'}`}>
                   {a.correct ? `+${a.points_earned}` : '0'}
                 </span>
               </div>
